@@ -404,6 +404,16 @@ export default function MessagesPage({ params }: { params: Promise<{ slug?: stri
 }
 
 function DirectMessageRow({ message: m, fallback }: { message: any; fallback: string }) {
+  if (m.isSystem) {
+    return (
+      <div className="py-1">
+        <p className="text-sm text-teal-700 dark:text-teal-400 whitespace-pre-wrap">{m.content}</p>
+        <p className="text-xs text-teal-700/70 dark:text-teal-400/70 mt-0.5">
+          {formatDistanceToNow(new Date(m.createdAt), { addSuffix: true })}
+        </p>
+      </div>
+    );
+  }
   return (
     <div className="flex gap-3">
       <div className="w-7 h-7 rounded-full bg-primary/10 dark:bg-primary/20 flex items-center justify-center text-xs font-semibold text-primary shrink-0">

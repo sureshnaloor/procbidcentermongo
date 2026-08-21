@@ -217,6 +217,7 @@ export interface IBid {
   revisionRequest?: IBidRevisionRequest;
   revisionDraft?: IBidRevisionDraft;
   revisedAt?: Date;
+  signedOffers?: IBidSignedOffer[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -225,10 +226,24 @@ export type BidRevisionSource = 'vendor_invite' | 'company_verbal' | 'original_s
 
 export interface IBidRevisionRequest {
   open: boolean;
+  pendingApproval?: boolean;
   source: 'vendor_invite' | 'company_verbal';
+  initiatedBy?: 'company' | 'vendor';
   note?: string;
   requestedAt: Date;
   requestedBy: string;
+  approvedBy?: string;
+  approvedAt?: Date;
+}
+
+export interface IBidSignedOffer {
+  name: string;
+  fileUrl: string;
+  storedName: string;
+  fileType?: string;
+  fileSize?: number;
+  uploadedAt: Date;
+  uploadedBy: string;
 }
 
 export interface IBidRevisionDraft {
@@ -353,6 +368,8 @@ export interface IMessage {
   bidId?: ObjectId;
   subject?: string;
   content: string;
+  isSystem?: boolean;
+  systemEvent?: string;
   isRead: boolean;
   editedAt?: Date;
   createdAt: Date;
@@ -381,7 +398,9 @@ export type NotificationType =
   | 'invite_requested'
   | 'invite_accepted'
   | 'invite_declined'
-  | 'revision_requested';
+  | 'revision_requested'
+  | 'revision_request_received'
+  | 'revision_request_declined';
 
 export interface INotification {
   _id?: ObjectId;

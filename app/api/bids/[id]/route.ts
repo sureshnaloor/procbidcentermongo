@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { collections } from '@/lib/db';
 import { requireAuth, isNextResponse, getProfileForUser } from '@/lib/auth-helpers';
 import { bidLineItemInput, lineItemsTotal, normalizeStoredLineItem, resolvedBidTotal } from '@/lib/bid-line';
-import { applyRevisionDraft, shouldOverlayDraft, syncLatestRevisionSnapshot, presentRevisionHistory, VERBAL_REVISABLE_STATUSES, VENDOR_REVISABLE_STATUSES } from '@/lib/bid-revision';
+import { applyRevisionDraft, shouldOverlayDraft, syncLatestRevisionSnapshot, presentRevisionHistory, revisionIsPending, VERBAL_REVISABLE_STATUSES, VENDOR_REVISABLE_STATUSES, VENDOR_CAN_REQUEST_REVISION_STATUSES } from '@/lib/bid-revision';
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAuth();
@@ -31,11 +31,14 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const company = tender ? await profiles.findOne({ _id: tender.companyProfileId }) : null;
   const deadlineOpen = !tender?.bidDeadline || tender.bidDeadline.getTime() >= Date.now();
   const revisionOpen = Boolean(bid.revisionRequest?.open);
+  const pendingRevision = revisionIsPending(bid.revisionRequest);
   const canModify = isVendorOwner && bid.status === 'draft';
   const canRevise = isVendorOwner && revisionOpen && bid.revisionRequest?.source === 'vendor_invite';
   const canVerbalRevise = isCompanyOwner && revisionOpen && bid.revisionRequest?.source === 'company_verbal';
-  const canRequestRevision = isCompanyOwner && !revisionOpen && VENDOR_REVISABLE_STATUSES.includes(bid.status);
-  const canOpenVerbalRevision = isCompanyOwner && !revisionOpen && VERBAL_REVISABLE_STATUSES.includes(bid.status);
+  const canRequestRevision = isCompanyOwner && !revisionOpen && !pendingRevision && VENDOR_REVISABLE_STATUSES.includes(bid.status);
+  const canOpenVerbalRevision = isCompanyOwner && !revisionOpen && !pendingRevision && VERBAL_REVISABLE_STATUSES.includes(bid.status);
+  const canRequestToRevise = isVendorOwner && !revisionOpen && !pendingRevision && VENDOR_CAN_REQUEST_REVISION_STATUSES.includes(bid.status) && tender?.status !== 'awarded' && tender?.status !== 'cancelled';
+  const canApproveRevisionRequest = isCompanyOwner && pendingRevision;
   const canWithdraw = isVendorOwner && deadlineOpen && ['draft', 'submitted', 'under_review', 'shortlisted'].includes(bid.status);
 
   let blacklisted = false;
@@ -73,6 +76,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     canVerbalRevise,
     canRequestRevision,
     canOpenVerbalRevision,
+    canRequestToRevise,
+    canApproveRevisionRequest,
     canWithdraw,
     blacklisted,
   });

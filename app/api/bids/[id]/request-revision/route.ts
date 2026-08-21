@@ -3,8 +3,9 @@ import { ObjectId } from 'mongodb';
 import { z } from 'zod';
 import { collections } from '@/lib/db';
 import { requireAuth, isNextResponse, requireCompanyProfile } from '@/lib/auth-helpers';
-import { buildRevisionRequest, ensureOriginalVersion, VENDOR_REVISABLE_STATUSES } from '@/lib/bid-revision';
+import { buildRevisionRequest, ensureOriginalVersion, revisionIsPending, VENDOR_REVISABLE_STATUSES } from '@/lib/bid-revision';
 import { notify } from '@/lib/notify';
+import { postOfferThreadSystemMessage, systemMessageText } from '@/lib/offer-thread-system';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAuth();
@@ -29,13 +30,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!VENDOR_REVISABLE_STATUSES.includes(bid.status)) {
     return NextResponse.json({ error: 'Shortlist this supplier before asking them to revise their offer' }, { status: 400 });
   }
-  if (bid.revisionRequest?.open) {
-    return NextResponse.json({ error: 'A revision is already open for this offer' }, { status: 400 });
+  if (bid.revisionRequest?.open || revisionIsPending(bid.revisionRequest)) {
+    return NextResponse.json({ error: 'A revision is already open or waiting for approval on this offer' }, { status: 400 });
   }
 
   const now = new Date();
   const versions = ensureOriginalVersion(bid, auth.user.displayName);
-  const revisionRequest = buildRevisionRequest('vendor_invite', auth.user.displayName, note);
+  const revisionRequest = buildRevisionRequest('vendor_invite', auth.user.displayName, note, { initiatedBy: 'company' });
   await bids.updateOne({ _id: bid._id! }, { $set: { versions, revisionRequest, updatedAt: now } });
   await bidHistory.insertOne({
     bidId: bid._id!,
@@ -53,5 +54,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     relatedId: bid._id,
     relatedType: 'bid',
   });
+  try {
+    await postOfferThreadSystemMessage({
+      tenderId: tender._id!,
+      companyProfileId: tender.companyProfileId,
+      vendorProfileId: bid.vendorProfileId,
+      actorProfileId: company._id!,
+      bidId: bid._id!,
+      event: 'ask_to_revise',
+      content: systemMessageText('ask_to_revise', note),
+    });
+  } catch { /* ignore */ }
   return NextResponse.json(await bids.findOne({ _id: bid._id! }));
 }

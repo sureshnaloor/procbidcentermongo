@@ -40,3 +40,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 testoxalpha.ts
+
+/uploads/profiles/*
+!/uploads/profiles/.gitkeep
+
+/uploads/tenders/*
+!/uploads/tenders/.gitkeep

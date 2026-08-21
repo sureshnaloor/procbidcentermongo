@@ -3,7 +3,8 @@ import { ObjectId } from 'mongodb';
 import { z } from 'zod';
 import { collections } from '@/lib/db';
 import { requireAuth, isNextResponse, requireCompanyProfile } from '@/lib/auth-helpers';
-import { buildRevisionRequest, ensureOriginalVersion, VERBAL_REVISABLE_STATUSES } from '@/lib/bid-revision';
+import { buildRevisionRequest, ensureOriginalVersion, revisionIsPending, VERBAL_REVISABLE_STATUSES } from '@/lib/bid-revision';
+import { postOfferThreadSystemMessage, systemMessageText } from '@/lib/offer-thread-system';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAuth();
@@ -28,13 +29,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!VERBAL_REVISABLE_STATUSES.includes(bid.status)) {
     return NextResponse.json({ error: 'Only a received offer can be revised from a verbal agreement' }, { status: 400 });
   }
-  if (bid.revisionRequest?.open) {
-    return NextResponse.json({ error: 'A revision is already open for this offer' }, { status: 400 });
+  if (bid.revisionRequest?.open || revisionIsPending(bid.revisionRequest)) {
+    return NextResponse.json({ error: 'A revision is already open or waiting for approval on this offer' }, { status: 400 });
   }
 
   const now = new Date();
   const versions = ensureOriginalVersion(bid, auth.user.displayName);
-  const revisionRequest = buildRevisionRequest('company_verbal', auth.user.displayName, note);
+  const revisionRequest = buildRevisionRequest('company_verbal', auth.user.displayName, note, { initiatedBy: 'company' });
   await bids.updateOne({ _id: bid._id! }, { $set: { versions, revisionRequest, updatedAt: now } });
   await bidHistory.insertOne({
     bidId: bid._id!,
@@ -44,5 +45,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     changedBy: auth.user.displayName,
     createdAt: now,
   });
+  try {
+    await postOfferThreadSystemMessage({
+      tenderId: tender._id!,
+      companyProfileId: tender.companyProfileId,
+      vendorProfileId: bid.vendorProfileId,
+      actorProfileId: company._id!,
+      bidId: bid._id!,
+      event: 'verbal_revision_opened',
+      content: systemMessageText('verbal_revision_opened', note),
+    });
+  } catch { /* ignore */ }
   return NextResponse.json(await bids.findOne({ _id: bid._id! }));
 }

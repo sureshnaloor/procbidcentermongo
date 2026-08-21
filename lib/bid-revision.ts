@@ -10,6 +10,7 @@ import { lineItemsTotal, resolvedBidTotal } from '@/lib/bid-line';
 
 export const VENDOR_REVISABLE_STATUSES: BidStatus[] = ['shortlisted'];
 export const VERBAL_REVISABLE_STATUSES: BidStatus[] = ['submitted', 'under_review', 'shortlisted', 'accepted', 'rejected'];
+export const VENDOR_CAN_REQUEST_REVISION_STATUSES: BidStatus[] = ['submitted', 'under_review', 'shortlisted', 'accepted'];
 
 export function commercialFields(bid: Pick<
   IBid,
@@ -100,17 +101,26 @@ export function shouldOverlayDraft(
   return false;
 }
 
+export function revisionIsPending(request?: IBidRevisionRequest | null) {
+  return Boolean(request?.pendingApproval && !request.open);
+}
+
 export function buildRevisionRequest(
   source: IBidRevisionRequest['source'],
   requestedBy: string,
-  note?: string
+  note?: string,
+  extra?: Partial<IBidRevisionRequest>
 ): IBidRevisionRequest {
   return {
-    open: true,
+    open: extra?.open ?? true,
+    pendingApproval: extra?.pendingApproval ?? false,
     source,
+    initiatedBy: extra?.initiatedBy ?? 'company',
     note: note?.trim() || undefined,
-    requestedAt: new Date(),
+    requestedAt: extra?.requestedAt ?? new Date(),
     requestedBy,
+    approvedBy: extra?.approvedBy,
+    approvedAt: extra?.approvedAt,
   };
 }
 

@@ -10,9 +10,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, Loader2, Printer } from "lucide-react";
+import { ArrowLeft, Loader2, Printer, FileSpreadsheet } from "lucide-react";
 import { BidComparisonStatement } from "@/components/bid-comparison-statement";
 import { MAX_COMPARISON_REMARKS, comparisonColumns, recommendedPaper, type PaperSize } from "@/lib/comparison";
+import { downloadBoqFile } from "@/lib/boq-browser";
 
 export default function ComparisonStatementPage({ params }: { params: Promise<{ tenderId: string }> }) {
   const { tenderId } = use(params);
@@ -131,6 +132,22 @@ export default function ComparisonStatementPage({ params }: { params: Promise<{ 
           </select>
           <Button onClick={() => window.print()} id="print-comparison-btn">
             <Printer className="h-4 w-4" /> Print / PDF
+          </Button>
+          <Button
+            variant="outline"
+            id="excel-comparison-btn"
+            onClick={async () => {
+              try {
+                await downloadBoqFile(
+                  `/api/comparisons/${tenderId}/excel${includeOriginal ? "?includeOriginal=1" : ""}`,
+                  "comparison.xlsx"
+                );
+              } catch (err) {
+                toast.error(err instanceof Error ? err.message : "Could not download Excel");
+              }
+            }}
+          >
+            <FileSpreadsheet className="h-4 w-4" /> Excel
           </Button>
         </div>
       </div>

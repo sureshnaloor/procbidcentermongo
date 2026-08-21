@@ -9,6 +9,7 @@ import { matchesClause } from '@/lib/clauses';
 import { hasRegisteredDsc, dscIsValidOn } from '@/lib/dsc';
 import { hashBidDocument } from '@/lib/bid-hash';
 import { saveBidSignatureFile } from '@/lib/bid-files';
+import { postOfferThreadSystemMessage, systemMessageText } from '@/lib/offer-thread-system';
 import type { IBidSignature } from '@/lib/types';
 
 const submitBody = z.object({
@@ -117,5 +118,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     changedBy: auth.user.displayName,
     createdAt: now,
   });
+  if (profile?._id) {
+    try {
+      await postOfferThreadSystemMessage({
+        tenderId: tender._id!,
+        companyProfileId: tender.companyProfileId,
+        vendorProfileId: bid.vendorProfileId,
+        actorProfileId: profile._id,
+        bidId: bid._id!,
+        event: 'revision_submitted',
+        content: systemMessageText('revision_submitted'),
+      });
+    } catch { /* ignore */ }
+  }
   return NextResponse.json(await bids.findOne({ _id: bid._id! }));
 }

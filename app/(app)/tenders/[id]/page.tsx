@@ -486,19 +486,27 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
                 </div>
                 <div className="grid gap-3">
                   {(bids as any[]).map((b: any) => (
-                    <Link key={b._id} href={`/bids/${b._id}`}>
-                      <Card className="hover:shadow-md transition-shadow cursor-pointer">
-                        <CardContent className="p-4">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <div className="font-medium text-sm">{b.vendor?.companyName ?? "Unknown vendor"}</div>
-                              <div className="text-xs text-muted-foreground mt-0.5">{b.currency} {b.totalPrice?.toLocaleString() ?? "—"} · Validity: {b.validityDays} days</div>
-                            </div>
-                            <Badge variant={STATUS_COLORS[b.status] ?? "outline"} className="shrink-0">{b.status}</Badge>
+                    <Card key={b._id} className="hover:shadow-md transition-shadow">
+                      <CardContent className="p-4 space-y-2">
+                        <Link href={`/bids/${b._id}`} className="flex items-center justify-between">
+                          <div>
+                            <div className="font-medium text-sm">{b.vendor?.companyName ?? "Unknown vendor"}</div>
+                            <div className="text-xs text-muted-foreground mt-0.5">{b.currency} {b.totalPrice?.toLocaleString() ?? "—"} · Validity: {b.validityDays} days</div>
                           </div>
-                        </CardContent>
-                      </Card>
-                    </Link>
+                          <Badge variant={STATUS_COLORS[b.status] ?? "outline"} className="shrink-0">{b.status}</Badge>
+                        </Link>
+                        {(b.signedOffers ?? []).length > 0 && (
+                          <div className="pt-1 border-t border-border space-y-1">
+                            <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Signed offer</div>
+                            {(b.signedOffers as any[]).map((doc: any) => (
+                              <a key={doc.storedName} href={doc.fileUrl} target="_blank" rel="noreferrer" className="block text-xs text-primary hover:underline truncate">
+                                {doc.name}
+                              </a>
+                            ))}
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
                   ))}
                 </div>
               </>

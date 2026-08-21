@@ -127,6 +127,18 @@ export function OfferThreadPanel({
           )}
           {messages.map((msg: any) => {
             const mine = myId && String(msg.senderProfileId) === myId;
+            if (msg.isSystem) {
+              return (
+                <div key={msg._id} className="px-1 py-1">
+                  <p className="text-xs text-center text-teal-700 dark:text-teal-400 whitespace-pre-wrap">
+                    {msg.content}
+                  </p>
+                  <p className="text-[10px] text-center text-teal-700/70 dark:text-teal-400/70 mt-0.5">
+                    {msg.createdAt ? formatDistanceToNow(new Date(msg.createdAt), { addSuffix: true }) : ""}
+                  </p>
+                </div>
+              );
+            }
             return (
               <div key={msg._id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
                 <div className={`max-w-[90%] rounded-lg px-3 py-2 text-sm ${mine ? "bg-primary text-primary-foreground" : "bg-muted text-foreground"}`}>

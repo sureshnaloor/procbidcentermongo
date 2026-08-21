@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Loader2, ArrowLeft, Check, X, RotateCcw, SendHorizontal, Pencil, Ban, Eye, Printer, RefreshCw, Phone } from "lucide-react";
+import { Loader2, ArrowLeft, Check, X, RotateCcw, SendHorizontal, Pencil, Ban, Eye, Printer, RefreshCw, Phone, Upload } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -29,6 +29,7 @@ import { ClauseDiffText } from "@/components/clause-diff";
 import { formatDelivery } from "@/lib/bid-line";
 import { OfferConfirmDialog, type OfferConfirmKind, type OfferConfirmPayload } from "@/components/offer-confirm-dialog";
 import { OfferThreadPanel } from "@/components/offer-thread-panel";
+import { readFileAsDataUrl } from "@/lib/boq-browser";
 
 const STATUS_COLORS: Record<string, "default" | "secondary" | "destructive" | "outline" | "success" | "warning"> = {
   draft: "secondary", submitted: "default", under_review: "warning", shortlisted: "success",
@@ -44,7 +45,9 @@ export default function BidDetailPage({ params }: { params: Promise<{ id: string
   const qc = useQueryClient();
   const [confirmKind, setConfirmKind] = useState<OfferConfirmKind | null>(null);
   const [askReviseOpen, setAskReviseOpen] = useState(false);
+  const [vendorRequestOpen, setVendorRequestOpen] = useState(false);
   const [reviseNote, setReviseNote] = useState("");
+  const [vendorRequestNote, setVendorRequestNote] = useState("");
 
   const { data: bid, isLoading } = useQuery({
     queryKey: ["bid", id],
@@ -130,6 +133,68 @@ export default function BidDetailPage({ params }: { params: Promise<{ id: string
       toast.success("Supplier invited to revise this offer");
       qc.invalidateQueries({ queryKey: ["bid", id] });
       qc.invalidateQueries({ queryKey: ["bids"] });
+      qc.invalidateQueries({ queryKey: ["offer-thread"] });
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const vendorRequestMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/bids/${id}/request-to-revise`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ note: vendorRequestNote }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to request revision");
+      return data;
+    },
+    onSuccess: () => {
+      setVendorRequestOpen(false);
+      setVendorRequestNote("");
+      toast.success("Revision request sent to the company");
+      qc.invalidateQueries({ queryKey: ["bid", id] });
+      qc.invalidateQueries({ queryKey: ["bids"] });
+      qc.invalidateQueries({ queryKey: ["offer-thread"] });
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const revisionDecisionMutation = useMutation({
+    mutationFn: async (action: "approve" | "decline") => {
+      const res = await fetch(`/api/bids/${id}/revision-request-decision`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to update request");
+      return { ...data, action };
+    },
+    onSuccess: (data) => {
+      toast.success(data.action === "approve" ? "Supplier may now revise this offer" : "Revision request declined");
+      qc.invalidateQueries({ queryKey: ["bid", id] });
+      qc.invalidateQueries({ queryKey: ["bids"] });
+      qc.invalidateQueries({ queryKey: ["offer-thread"] });
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const signedOfferMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const fileBase64 = await readFileAsDataUrl(file);
+      const res = await fetch(`/api/bids/${id}/signed-offer`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fileName: file.name, fileBase64 }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to upload signed offer");
+      return data;
+    },
+    onSuccess: () => {
+      toast.success("Signed offer uploaded");
+      qc.invalidateQueries({ queryKey: ["bid", id] });
     },
     onError: (err: Error) => toast.error(err.message),
   });
@@ -204,6 +269,11 @@ export default function BidDetailPage({ params }: { params: Promise<{ id: string
               </Button>
             </Link>
           )}
+          {bid.canRequestToRevise && (
+            <Button size="sm" variant="outline" onClick={() => setVendorRequestOpen(true)} id="request-to-revise-btn">
+              <RefreshCw /> Request to revise
+            </Button>
+          )}
           {bid.status === "draft" && (
             <Button size="sm" onClick={() => setConfirmKind("submit")} disabled={submitMutation.isPending} id="submit-bid-btn">
               <SendHorizontal /> Submit
@@ -222,11 +292,36 @@ export default function BidDetailPage({ params }: { params: Promise<{ id: string
           )}
         </div>
       )}
+      {isVendorOwner && bid.revisionRequest?.pendingApproval && !bid.revisionRequest?.open && (
+        <div className="rounded-lg border border-teal-500/30 bg-teal-500/5 p-4 text-sm">
+          <p className="font-medium">Your request to revise is waiting for company approval.</p>
+          {bid.revisionRequest.note && <p className="text-muted-foreground mt-1">{bid.revisionRequest.note}</p>}
+        </div>
+      )}
       {isVendorOwner && bid.revisionRequest?.open && bid.revisionRequest.source === "vendor_invite" && (
         <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 text-sm">
-          <p className="font-medium">The company has invited you to revise this offer.</p>
+          <p className="font-medium">
+            {bid.revisionRequest.initiatedBy === "vendor"
+              ? "The company approved your revision request. You may now revise this offer."
+              : "The company has invited you to revise this offer."}
+          </p>
           {bid.revisionRequest.note && <p className="text-muted-foreground mt-1">{bid.revisionRequest.note}</p>}
           <p className="text-muted-foreground mt-1">Use Revise bid to update prices, quantities, or terms, then submit the revised offer. Your original submission stays in history.</p>
+        </div>
+      )}
+
+      {isCompanyOwner && bid.revisionRequest?.pendingApproval && !bid.revisionRequest?.open && (
+        <div className="rounded-lg border border-teal-500/30 bg-teal-500/5 p-4 text-sm space-y-2">
+          <p className="font-medium">Supplier requested a revision to this offer.</p>
+          {bid.revisionRequest.note && <p className="text-muted-foreground">{bid.revisionRequest.note}</p>}
+          <div className="flex gap-2">
+            <Button size="sm" onClick={() => revisionDecisionMutation.mutate("approve")} disabled={revisionDecisionMutation.isPending} id="approve-revise-request-btn">
+              Approve request
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => revisionDecisionMutation.mutate("decline")} disabled={revisionDecisionMutation.isPending} id="decline-revise-request-btn">
+              Decline
+            </Button>
+          </div>
         </div>
       )}
 
@@ -334,6 +429,38 @@ export default function BidDetailPage({ params }: { params: Promise<{ id: string
                   Download signed file
                 </a>
               )}
+            </div>
+          )}
+          {(isVendorOwner || isCompanyOwner) && bid.status !== "draft" && (
+            <div className="col-span-2 rounded-md border border-border bg-muted/40 p-3 space-y-2">
+              <div className="font-medium">Signed offer</div>
+              <p className="text-xs text-muted-foreground">Print the offer, sign it, and upload the PDF or scan here.</p>
+              {(bid.signedOffers ?? []).length > 0 && (
+                <div className="space-y-1">
+                  {(bid.signedOffers as any[]).map((doc: any) => (
+                    <a key={doc.storedName} href={doc.fileUrl} target="_blank" rel="noreferrer" className="block text-sm text-primary hover:underline truncate">
+                      {doc.name}
+                    </a>
+                  ))}
+                </div>
+              )}
+              {isVendorOwner && (
+                <Label htmlFor="signed-offer-upload" className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-input text-sm font-medium cursor-pointer hover:bg-accent w-fit">
+                  {signedOfferMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                  Upload signed offer
+                </Label>
+              )}
+              <input
+                id="signed-offer-upload"
+                type="file"
+                className="hidden"
+                accept=".pdf,.png,.jpg,.jpeg,.webp,application/pdf,image/*"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = "";
+                  if (file) signedOfferMutation.mutate(file);
+                }}
+              />
             </div>
           )}
         </CardContent>
@@ -508,6 +635,33 @@ export default function BidDetailPage({ params }: { params: Promise<{ id: string
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <Button onClick={() => requestRevisionMutation.mutate()} disabled={requestRevisionMutation.isPending} id="confirm-ask-revise-btn">
               {requestRevisionMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Send invitation"}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={vendorRequestOpen} onOpenChange={setVendorRequestOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Request to revise this offer</AlertDialogTitle>
+            <AlertDialogDescription>
+              The company must approve before you can change prices, quantities, or terms. This works before or after the bid deadline.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-1.5">
+            <Label htmlFor="vendor-revise-note">Note to company (optional)</Label>
+            <Textarea
+              id="vendor-revise-note"
+              rows={3}
+              value={vendorRequestNote}
+              onChange={(e) => setVendorRequestNote(e.target.value)}
+              placeholder="e.g. Packing quantity and payment terms need an update"
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <Button onClick={() => vendorRequestMutation.mutate()} disabled={vendorRequestMutation.isPending} id="confirm-request-to-revise-btn">
+              {vendorRequestMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Send request"}
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>

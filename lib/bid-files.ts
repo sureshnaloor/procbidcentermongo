@@ -4,7 +4,8 @@ import { nanoid } from 'nanoid';
 import { isSafeStoredName, mimeForExtension } from '@/lib/tender-files';
 
 const BID_FILE_MAX_BYTES = 20 * 1024 * 1024;
-const ALLOWED = new Set(['pdf', 'p7s', 'p7b', 'sig']);
+const SIGNATURE_ALLOWED = new Set(['pdf', 'p7s', 'p7b', 'sig']);
+const OFFER_DOC_ALLOWED = new Set(['pdf', 'png', 'jpg', 'jpeg', 'webp']);
 
 export const BID_UPLOAD_DIR = path.resolve(process.cwd(), 'uploads', 'bids');
 
@@ -23,7 +24,7 @@ export async function saveBidSignatureFile(
 ): Promise<{ storedName: string; fileUrl: string; fileSize: number; ext: string }> {
   const buffer = decodeBase64(fileBase64);
   const ext = path.extname(fileName).toLowerCase().replace('.', '');
-  if (!ALLOWED.has(ext)) {
+  if (!SIGNATURE_ALLOWED.has(ext)) {
     throw new Error('Attach a DSC-signed PDF or PKCS#7 signature file (.pdf, .p7s, .p7b, .sig)');
   }
   if (buffer.byteLength > BID_FILE_MAX_BYTES) {
@@ -47,6 +48,29 @@ export async function deleteBidSignatureFile(storedName: string): Promise<void> 
   } catch {
     // File may already be gone
   }
+}
+
+export async function saveBidOfferDocumentFile(
+  fileName: string,
+  fileBase64: string
+): Promise<{ storedName: string; fileUrl: string; fileSize: number; ext: string }> {
+  const buffer = decodeBase64(fileBase64);
+  const ext = path.extname(fileName).toLowerCase().replace('.', '');
+  if (!OFFER_DOC_ALLOWED.has(ext)) {
+    throw new Error('Upload a signed PDF or scan (.pdf, .jpg, .png)');
+  }
+  if (buffer.byteLength > BID_FILE_MAX_BYTES) {
+    throw new Error('Signed offer exceeds the 20 MB limit');
+  }
+  const storedName = `${nanoid(16)}.${ext}`;
+  await mkdir(BID_UPLOAD_DIR, { recursive: true });
+  await writeFile(getBidUploadPath(storedName), buffer);
+  return {
+    storedName,
+    fileUrl: `/api/files/bids/${storedName}`,
+    fileSize: buffer.byteLength,
+    ext,
+  };
 }
 
 export { isSafeStoredName, mimeForExtension };

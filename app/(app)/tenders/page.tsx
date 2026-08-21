@@ -252,8 +252,9 @@ function VendorTenderCard({ tender: t }: { tender: any }) {
                     <Link href={`/bids/${bid._id}`} className="block">
                       <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                         <Badge variant={BID_STATUS_COLORS[bid.status] ?? "outline"}>{statusLabel(bid.status)}</Badge>
+                        {bid.revisionRequest?.pendingApproval && !bid.revisionRequest?.open && <Badge variant="warning">Request to revise</Badge>}
                         {bid.revisionRequest?.open && <Badge variant="warning">Revision requested</Badge>}
-                        {bid.revisedAt && !bid.revisionRequest?.open && <Badge variant="outline">Revised</Badge>}
+                        {bid.revisedAt && !bid.revisionRequest?.open && !bid.revisionRequest?.pendingApproval && <Badge variant="outline">Revised</Badge>}
                         <span className="text-xs font-mono text-muted-foreground">#{String(bid._id).slice(-6)}</span>
                       </div>
                       <div className="text-xs text-muted-foreground">
