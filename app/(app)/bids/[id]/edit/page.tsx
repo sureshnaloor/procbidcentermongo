@@ -24,23 +24,20 @@ export default function EditBidPage({ params }: { params: Promise<{ id: string }
     queryFn: () => fetch(`/api/bids/${id}`).then((r) => r.json()),
   });
 
+  const canEditDraft = Boolean(bid?.canModify);
+  const canRevise = Boolean(bid?.canRevise || bid?.canVerbalRevise);
+
   useEffect(() => {
-    if (!bid) return;
-    const isOwner = profile?.userType === "vendor" && String(bid.vendorProfileId) === String(profile?._id);
-    if (profile && !isOwner) {
-      router.replace(`/bids/${id}`);
-      return;
-    }
-    if (bid.status && bid.status !== "draft") {
-      router.replace(`/bids/${id}`);
-    }
-  }, [bid, profile, router, id]);
+    if (!bid || !profile) return;
+    if (canEditDraft || canRevise) return;
+    router.replace(`/bids/${id}`);
+  }, [bid, profile, router, id, canEditDraft, canRevise]);
 
   if (isLoading) return <div className="flex items-center justify-center py-16"><Loader2 className="animate-spin h-6 w-6 text-muted-foreground" /></div>;
   if (!bid || !bid.tender) return <div className="text-center py-16 text-muted-foreground" />;
-  if (bid.status !== "draft") {
+  if (!canEditDraft && !canRevise) {
     return <div className="flex items-center justify-center py-16"><Loader2 className="animate-spin h-6 w-6 text-muted-foreground" /></div>;
   }
 
-  return <BidForm mode="edit" tender={bid.tender} bid={bid} />;
+  return <BidForm mode={canRevise ? "revise" : "edit"} tender={bid.tender} bid={bid} />;
 }

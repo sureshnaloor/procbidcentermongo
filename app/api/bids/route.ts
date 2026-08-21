@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { collections } from '@/lib/db';
 import { requireAuth, isNextResponse, requireVendorProfile } from '@/lib/auth-helpers';
 import { assertVendorCanOffer, isBidDeadlineOpen } from '@/lib/tender-access';
-import { bidLineItemInput, normalizeStoredLineItem } from '@/lib/bid-line';
+import { bidLineItemInput, lineItemsTotal, normalizeStoredLineItem, resolvedBidTotal } from '@/lib/bid-line';
 
 export async function GET() {
   const auth = await requireAuth();
@@ -55,6 +55,7 @@ export async function GET() {
 
   return NextResponse.json(rows.map((b) => ({
     ...b,
+    totalPrice: resolvedBidTotal(b),
     vendor: vendorById.get(b.vendorProfileId.toString()) ?? null,
     tender: tenderById.get(b.tenderId.toString()) ?? null,
   })));
@@ -103,19 +104,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'You already have an offer on this package' }, { status: 400 });
   }
 
+  const storedLines = (data.lineItems ?? []).map((item) => normalizeStoredLineItem(item));
   const now = new Date();
   const result = await bids.insertOne({
     tenderId: tender._id!,
     vendorProfileId: vendor._id!,
     status: 'draft',
-    totalPrice: data.totalPrice,
+    totalPrice: storedLines.length > 0 ? lineItemsTotal(storedLines) : data.totalPrice,
     currency: data.currency,
     validityDays: data.validityDays,
     technicalProposal: data.technicalProposal,
     commercialProposal: data.commercialProposal,
     notes: data.notes,
     clauseResponses: data.clauseResponses,
-    lineItems: (data.lineItems ?? []).map((item) => normalizeStoredLineItem(item)),
+    lineItems: storedLines,
     createdAt: now,
     updatedAt: now,
   });

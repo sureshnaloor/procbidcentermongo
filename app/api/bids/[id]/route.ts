@@ -3,7 +3,8 @@ import { ObjectId } from 'mongodb';
 import { z } from 'zod';
 import { collections } from '@/lib/db';
 import { requireAuth, isNextResponse, getProfileForUser } from '@/lib/auth-helpers';
-import { bidLineItemInput, normalizeStoredLineItem } from '@/lib/bid-line';
+import { bidLineItemInput, lineItemsTotal, normalizeStoredLineItem, resolvedBidTotal } from '@/lib/bid-line';
+import { applyRevisionDraft, shouldOverlayDraft, syncLatestRevisionSnapshot, presentRevisionHistory, VERBAL_REVISABLE_STATUSES, VENDOR_REVISABLE_STATUSES } from '@/lib/bid-revision';
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAuth();
@@ -29,7 +30,12 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const vendor = await profiles.findOne({ _id: bid.vendorProfileId });
   const company = tender ? await profiles.findOne({ _id: tender.companyProfileId }) : null;
   const deadlineOpen = !tender?.bidDeadline || tender.bidDeadline.getTime() >= Date.now();
+  const revisionOpen = Boolean(bid.revisionRequest?.open);
   const canModify = isVendorOwner && bid.status === 'draft';
+  const canRevise = isVendorOwner && revisionOpen && bid.revisionRequest?.source === 'vendor_invite';
+  const canVerbalRevise = isCompanyOwner && revisionOpen && bid.revisionRequest?.source === 'company_verbal';
+  const canRequestRevision = isCompanyOwner && !revisionOpen && VENDOR_REVISABLE_STATUSES.includes(bid.status);
+  const canOpenVerbalRevision = isCompanyOwner && !revisionOpen && VERBAL_REVISABLE_STATUSES.includes(bid.status);
   const canWithdraw = isVendorOwner && deadlineOpen && ['draft', 'submitted', 'under_review', 'shortlisted'].includes(bid.status);
 
   let blacklisted = false;
@@ -40,14 +46,33 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     }));
   }
 
+  const overlay = shouldOverlayDraft(bid, { isVendorOwner, isCompanyOwner });
+  const payload = overlay ? applyRevisionDraft(bid, bid.revisionDraft) : bid;
+  const totalPrice = resolvedBidTotal(payload);
+  const versions = syncLatestRevisionSnapshot(bid);
+  const liveTotal = resolvedBidTotal(bid);
+  const versionsChanged = (bid.versions ?? []).some((v, i) => Number(v.totalPrice) !== Number(versions[i]?.totalPrice));
+  if (versionsChanged || (liveTotal != null && Number(bid.totalPrice) !== liveTotal)) {
+    const repair: Record<string, unknown> = { versions };
+    if (liveTotal != null) repair.totalPrice = liveTotal;
+    await bids.updateOne({ _id: bid._id! }, { $set: repair });
+  }
+
   return NextResponse.json({
-    ...bid,
-    history,
+    ...payload,
+    totalPrice,
+    history: presentRevisionHistory(history, versions),
+    versions,
+    revisionRequest: bid.revisionRequest ?? null,
     vendor,
     tender: tender
       ? { ...tender, company: company ? { _id: company._id, companyName: company.companyName } : null }
       : null,
     canModify,
+    canRevise,
+    canVerbalRevise,
+    canRequestRevision,
+    canOpenVerbalRevision,
     canWithdraw,
     blacklisted,
   });
@@ -59,15 +84,25 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const { id } = await params;
   if (!ObjectId.isValid(id)) return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
 
-  const { bids, bidHistory } = await collections();
+  const { bids, bidHistory, tenders } = await collections();
   const bid = await bids.findOne({ _id: new ObjectId(id) });
   if (!bid) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   const profile = await getProfileForUser(auth.user.id);
-  if (!profile || bid.vendorProfileId.toString() !== profile._id!.toString()) {
-    return NextResponse.json({ error: 'You can only edit your own bids' }, { status: 403 });
+  const tender = await tenders.findOne({ _id: bid.tenderId });
+  const isVendorOwner = Boolean(profile && bid.vendorProfileId.toString() === profile._id!.toString());
+  const isCompanyOwner = Boolean(
+    profile?.userType === 'company' && tender && tender.companyProfileId.toString() === profile._id!.toString()
+  );
+  const revisionOpen = Boolean(bid.revisionRequest?.open);
+  const vendorRevising = isVendorOwner && revisionOpen && bid.revisionRequest?.source === 'vendor_invite';
+  const companyRevising = isCompanyOwner && revisionOpen && bid.revisionRequest?.source === 'company_verbal';
+  const editingDraft = isVendorOwner && bid.status === 'draft';
+
+  if (!editingDraft && !vendorRevising && !companyRevising) {
+    if (!isVendorOwner) return NextResponse.json({ error: 'You can only edit your own bids' }, { status: 403 });
+    return NextResponse.json({ error: 'This offer is not open for editing' }, { status: 400 });
   }
-  if (bid.status !== 'draft') return NextResponse.json({ error: 'Only draft bids can be edited' }, { status: 400 });
 
   const body = await req.json();
   const data = z.object({
@@ -89,25 +124,48 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   }).parse(body);
 
   const { lineItems, totalPrice, clauseResponses, ...rest } = data;
-  const setFields: Record<string, unknown> = { ...rest, updatedAt: new Date() };
-  if (totalPrice !== undefined) {
-    if (String(totalPrice) !== String(bid.totalPrice)) {
-      await bidHistory.insertOne({
-        bidId: bid._id!,
-        fieldName: 'totalPrice',
-        oldValue: String(bid.totalPrice),
-        newValue: String(totalPrice),
-        changedBy: auth.user.displayName,
-        createdAt: new Date(),
-      });
-    }
-    setFields.totalPrice = totalPrice;
+  const now = new Date();
+
+  if (vendorRevising || companyRevising) {
+    const nextLines = lineItems !== undefined
+      ? lineItems.map((item) => normalizeStoredLineItem(item))
+      : bid.revisionDraft?.lineItems ?? bid.lineItems;
+    const fromLines = lineItemsTotal(nextLines);
+    await bids.updateOne({ _id: bid._id! }, {
+      $set: {
+        revisionDraft: {
+          ...rest,
+          totalPrice: (nextLines?.length ?? 0) > 0 ? fromLines : totalPrice,
+          clauseResponses,
+          lineItems: nextLines,
+          savedAt: now,
+        },
+        updatedAt: now,
+      },
+    });
+    return NextResponse.json(await bids.findOne({ _id: bid._id! }));
   }
+
+  const setFields: Record<string, unknown> = { ...rest, updatedAt: now };
   if (clauseResponses !== undefined) {
     setFields.clauseResponses = clauseResponses;
   }
   if (lineItems !== undefined) {
-    setFields.lineItems = lineItems.map((item) => normalizeStoredLineItem(item));
+    const storedLines = lineItems.map((item) => normalizeStoredLineItem(item));
+    setFields.lineItems = storedLines;
+    setFields.totalPrice = lineItemsTotal(storedLines);
+  } else if (totalPrice !== undefined) {
+    setFields.totalPrice = totalPrice;
+  }
+  if (setFields.totalPrice !== undefined && String(setFields.totalPrice) !== String(bid.totalPrice)) {
+    await bidHistory.insertOne({
+      bidId: bid._id!,
+      fieldName: 'totalPrice',
+      oldValue: String(bid.totalPrice),
+      newValue: String(setFields.totalPrice),
+      changedBy: auth.user.displayName,
+      createdAt: now,
+    });
   }
 
   await bids.updateOne({ _id: new ObjectId(id) }, { $set: setFields });

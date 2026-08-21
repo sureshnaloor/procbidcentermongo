@@ -167,6 +167,8 @@ export default function BidsPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                         <Badge variant={BID_STATUS_COLORS[b.status] ?? "outline"} className="shrink-0">{statusLabel(b.status)}</Badge>
+                        {b.revisionRequest?.open && <Badge variant="warning">Revision requested</Badge>}
+                        {b.revisedAt && !b.revisionRequest?.open && <Badge variant="outline">Revised</Badge>}
                       </div>
                       <h2 className="font-semibold text-foreground">{b.tender?.title || `Bid #${String(b._id).slice(-6)}`}</h2>
                     </div>
@@ -205,6 +207,8 @@ function CompanyBidCard({ bid }: { bid: any }) {
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2 mb-1.5">
               <Badge variant={BID_STATUS_COLORS[bid.status] ?? "outline"}>{statusLabel(bid.status)}</Badge>
+              {bid.revisionRequest?.open && <Badge variant="warning">Revision requested</Badge>}
+              {bid.revisedAt && !bid.revisionRequest?.open && <Badge variant="outline">Revised</Badge>}
               <span className="text-xs text-muted-foreground font-mono">#{String(bid._id).slice(-6)}</span>
             </div>
             <div className="flex items-center gap-1.5 font-semibold text-foreground">

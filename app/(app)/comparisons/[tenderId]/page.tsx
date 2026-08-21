@@ -12,13 +12,14 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ArrowLeft, Loader2, Printer } from "lucide-react";
 import { BidComparisonStatement } from "@/components/bid-comparison-statement";
-import { MAX_COMPARISON_REMARKS, recommendedPaper, type PaperSize } from "@/lib/comparison";
+import { MAX_COMPARISON_REMARKS, comparisonColumns, recommendedPaper, type PaperSize } from "@/lib/comparison";
 
 export default function ComparisonStatementPage({ params }: { params: Promise<{ tenderId: string }> }) {
   const { tenderId } = use(params);
   const { data: session } = useSession();
   const qc = useQueryClient();
   const [paper, setPaper] = useState<PaperSize>("a4");
+  const [includeOriginal, setIncludeOriginal] = useState(false);
   const [designation, setDesignation] = useState("");
   const [remarks, setRemarks] = useState("");
   const [editLevel, setEditLevel] = useState<number | null>(null);
@@ -36,6 +37,7 @@ export default function ComparisonStatementPage({ params }: { params: Promise<{ 
     }),
   });
 
+  const displayBids = useMemo(() => comparisonColumns(data?.bids ?? [], includeOriginal), [data, includeOriginal]);
   const quotedCount = data?.bids?.length ?? 0;
   const autoPaper = useMemo(() => recommendedPaper(quotedCount), [quotedCount]);
 
@@ -109,7 +111,16 @@ export default function ComparisonStatementPage({ params }: { params: Promise<{ 
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <select
+            <label className="flex items-center gap-2 text-sm text-muted-foreground whitespace-nowrap">
+              <input
+                type="checkbox"
+                checked={includeOriginal}
+                onChange={(e) => setIncludeOriginal(e.target.checked)}
+                id="include-original-bids"
+              />
+              Include original bid also
+            </label>
+            <select
             className="h-9 rounded-md border border-input bg-background px-2 text-sm"
             value={paper}
             onChange={(e) => setPaper(e.target.value as PaperSize)}
@@ -124,7 +135,7 @@ export default function ComparisonStatementPage({ params }: { params: Promise<{ 
         </div>
       </div>
 
-      <BidComparisonStatement data={data} paper={paper} />
+      <BidComparisonStatement data={{ ...data, bids: displayBids }} paper={paper} />
 
       <Card className="print:hidden">
         <CardHeader>

@@ -1,4 +1,4 @@
-import { formatDelivery } from '@/lib/bid-line';
+import { formatDelivery, resolvedBidTotal } from '@/lib/bid-line';
 import { clauseKey } from '@/lib/clauses';
 import { acceptedWithConditions } from '@/lib/text-diff';
 import { MAX_COMPARISON_REMARKS } from '@/lib/types';
@@ -91,4 +91,31 @@ export function vendorPublic(profile: any) {
     city: profile.city,
     country: profile.country,
   };
+}
+
+export function comparisonColumns(bids: any[], includeOriginal: boolean) {
+  const columns: any[] = [];
+  for (const bid of bids ?? []) {
+    const name = bid.vendor?.companyName || 'Supplier';
+    const isRevised = Boolean(bid.revisedAt);
+    if (includeOriginal && bid.originalVersion) {
+      columns.push({
+        ...bid,
+        ...bid.originalVersion,
+        totalPrice: resolvedBidTotal(bid.originalVersion),
+        _id: `${bid._id}-original`,
+        isOriginal: true,
+        vendor: { ...bid.vendor, companyName: `${name} (original)` },
+      });
+    }
+    columns.push({
+      ...bid,
+      isOriginal: false,
+      vendor: {
+        ...bid.vendor,
+        companyName: isRevised ? `${name} (revised)` : name,
+      },
+    });
+  }
+  return columns;
 }

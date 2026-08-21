@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { ObjectId } from 'mongodb';
 import { collections } from '@/lib/db';
 import { requireAuth, isNextResponse, getProfileForUser } from '@/lib/auth-helpers';
+import { resolvedBidTotal } from '@/lib/bid-line';
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ tenderId: string }> }) {
   const auth = await requireAuth();
@@ -19,7 +20,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ ten
   if (isAdmin) {
     const allBids = await bids.find({ tenderId: tender._id! }).sort({ createdAt: -1 }).toArray();
     const withVendors = await Promise.all(allBids.map(async (b) => ({
-      ...b, vendor: await profiles.findOne({ _id: b.vendorProfileId }),
+      ...b,
+      totalPrice: resolvedBidTotal(b),
+      vendor: await profiles.findOne({ _id: b.vendorProfileId }),
     })));
     return NextResponse.json(withVendors);
   }
@@ -27,14 +30,16 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ ten
   if (profile?.userType === 'company' && profile._id!.toString() === tender.companyProfileId.toString()) {
     const allBids = await bids.find({ tenderId: tender._id!, status: { $ne: 'draft' } }).sort({ createdAt: -1 }).toArray();
     const withVendors = await Promise.all(allBids.map(async (b) => ({
-      ...b, vendor: await profiles.findOne({ _id: b.vendorProfileId }),
+      ...b,
+      totalPrice: resolvedBidTotal(b),
+      vendor: await profiles.findOne({ _id: b.vendorProfileId }),
     })));
     return NextResponse.json(withVendors);
   }
 
   if (profile?.userType === 'vendor') {
     const ownBids = await bids.find({ tenderId: tender._id!, vendorProfileId: profile._id! }).sort({ createdAt: -1 }).toArray();
-    return NextResponse.json(ownBids);
+    return NextResponse.json(ownBids.map((b) => ({ ...b, totalPrice: resolvedBidTotal(b) })));
   }
 
   return NextResponse.json([]);

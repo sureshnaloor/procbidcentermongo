@@ -9,6 +9,7 @@ import { saveTenderDocumentFile, TENDER_FILE_MAX_COUNT, TENDER_FILE_MAX_TOTAL_BY
 import { normalizeTenderClauses } from '@/lib/clauses';
 import { DEFAULT_PROCUREMENT_TYPE, DOCUMENT_CATEGORY_VALUES, getPublishBlockers, getPublishDateIssues } from '@/lib/procurement';
 import { isOfferAuthorized } from '@/lib/tender-access';
+import { resolvedBidTotal } from '@/lib/bid-line';
 import type { Filter } from 'mongodb';
 import type { ITender, ITenderBoqItem } from '@/lib/types';
 
@@ -146,7 +147,7 @@ export async function GET(req: NextRequest) {
       participation: invite
         ? { status: invite.status, canPrepareOffer: isOfferAuthorized(invite.status) && myBids.length === 0 }
         : { status: null, canPrepareOffer: false },
-      myBids,
+      myBids: myBids.map((b) => ({ ...b, totalPrice: resolvedBidTotal(b) })),
     };
   });
 

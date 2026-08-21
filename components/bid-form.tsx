@@ -146,13 +146,13 @@ function buildPayload(tender: any, form: any, lineItems: LineItem[], clauseModes
   };
 }
 
-export function BidForm({ tender, bid, mode }: { tender: any; bid?: any; mode: "create" | "edit" }) {
+export function BidForm({ tender, bid, mode }: { tender: any; bid?: any; mode: "create" | "edit" | "revise" }) {
   const router = useRouter();
   const qc = useQueryClient();
   const tenderId = String(tender._id);
 
   const [form, setForm] = useState({
-    totalPrice: bid?.totalPrice != null ? String(bid.totalPrice) : "",
+    totalPrice: "",
     currency: bid?.currency || tender.currency || "USD",
     validityDays: bid?.validityDays != null ? String(bid.validityDays) : "90",
     technicalProposal: bid?.technicalProposal || "",
@@ -167,7 +167,7 @@ export function BidForm({ tender, bid, mode }: { tender: any; bid?: any; mode: "
   });
   const [clauseModes, setClauseModes] = useState<Record<string, ClauseMode>>({});
   const [clauseBodies, setClauseBodies] = useState<Record<string, string>>({});
-  const [boqSeeded, setBoqSeeded] = useState(mode === "edit");
+  const [boqSeeded, setBoqSeeded] = useState(mode !== "create");
   const [submitOpen, setSubmitOpen] = useState(false);
 
   const { data: profile } = useQuery({
@@ -176,7 +176,7 @@ export function BidForm({ tender, bid, mode }: { tender: any; bid?: any; mode: "
   });
 
   useEffect(() => {
-    if (boqSeeded || mode === "edit") return;
+    if (boqSeeded || mode !== "create") return;
     if (!Array.isArray(tender?.boqItems) || tender.boqItems.length === 0) return;
     const seeded = tender.boqItems
       .filter((item: any) => item.description?.trim() && Number(item.quantity) > 0)
@@ -264,14 +264,15 @@ export function BidForm({ tender, bid, mode }: { tender: any; bid?: any; mode: "
         if (missing) throw new Error(`Please accept or accept with conditions: ${missing.title}`);
       }
       const payload = buildPayload(tender, form, lineItems, clauseModes, clauseBodies, lineTotal);
-      const url = mode === "edit" ? `/api/bids/${bid._id}` : "/api/bids";
-      const method = mode === "edit" ? "PUT" : "POST";
+      const url = mode === "create" ? "/api/bids" : `/api/bids/${bid._id}`;
+      const method = mode === "create" ? "POST" : "PUT";
       const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to save offer");
       const bidId = data._id || bid?._id;
       if (!opts.draft) {
-        const submitRes = await fetch(`/api/bids/${bidId}/submit`, {
+        const submitUrl = mode === "revise" ? `/api/bids/${bidId}/submit-revision` : `/api/bids/${bidId}/submit`;
+        const submitRes = await fetch(submitUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -283,11 +284,11 @@ export function BidForm({ tender, bid, mode }: { tender: any; bid?: any; mode: "
         const submitData = await submitRes.json().catch(() => ({}));
         if (!submitRes.ok) throw new Error(submitData.error || "Failed to submit offer");
       }
-      return { ...data, _id: bidId, draft: opts.draft, preview: Boolean(opts.preview) };
+      return { ...data, _id: bidId, draft: opts.draft, preview: Boolean(opts.preview), revise: mode === "revise" };
     },
     onSuccess: (data) => {
       setSubmitOpen(false);
-      toast.success(data.preview ? "Draft saved — opening preview" : data.draft ? "Draft saved" : "Offer submitted");
+      toast.success(data.preview ? "Draft saved — opening preview" : data.draft ? (mode === "revise" ? "Revision saved" : "Draft saved") : (mode === "revise" ? "Revised offer submitted" : "Offer submitted"));
       qc.invalidateQueries({ queryKey: ["bids"] });
       qc.invalidateQueries({ queryKey: ["bid", data._id] });
       qc.invalidateQueries({ queryKey: ["tender", tenderId] });
@@ -299,12 +300,19 @@ export function BidForm({ tender, bid, mode }: { tender: any; bid?: any; mode: "
   return (
     <div className="max-w-5xl mx-auto space-y-6">
       <div className="flex items-center gap-3">
-        <Link href={mode === "edit" ? `/bids/${bid._id}` : `/tenders/${tenderId}`}>
+        <Link href={mode === "create" ? `/tenders/${tenderId}` : `/bids/${bid._id}`}>
           <Button variant="ghost" size="icon" className="shrink-0"><ArrowLeft className="h-4 w-4" /></Button>
         </Link>
         <div>
-          <h1 className="text-2xl font-bold text-foreground">{mode === "edit" ? "Modify Offer" : "Prepare Offer"}</h1>
+          <h1 className="text-2xl font-bold text-foreground">
+            {mode === "revise"
+              ? (bid?.revisionRequest?.source === "company_verbal" ? "Revise offer (verbal agreement)" : "Revise Offer")
+              : mode === "edit" ? "Modify Offer" : "Prepare Offer"}
+          </h1>
           <p className="text-sm text-muted-foreground">{tender.title}</p>
+          {mode === "revise" && bid?.revisionRequest?.note && (
+            <p className="text-xs text-muted-foreground mt-1">Company note: {bid.revisionRequest.note}</p>
+          )}
         </div>
       </div>
 
@@ -625,9 +633,11 @@ export function BidForm({ tender, bid, mode }: { tender: any; bid?: any; mode: "
         <Button variant="outline" onClick={() => mutation.mutate({ draft: true, preview: true })} disabled={mutation.isPending} id="preview-bid-btn">
           <Eye className="h-4 w-4" /> Preview
         </Button>
-        <Button variant="outline" onClick={() => mutation.mutate({ draft: true })} disabled={mutation.isPending} id="save-draft-btn">Save as Draft</Button>
+        <Button variant="outline" onClick={() => mutation.mutate({ draft: true })} disabled={mutation.isPending} id="save-draft-btn">
+          {mode === "revise" ? "Save progress" : "Save as Draft"}
+        </Button>
         <Button onClick={() => setSubmitOpen(true)} disabled={mutation.isPending} id="submit-bid-final-btn">
-          {mutation.isPending ? <><Loader2 className="animate-spin" />Saving...</> : "Submit Offer"}
+          {mutation.isPending ? <><Loader2 className="animate-spin" />Saving...</> : mode === "revise" ? "Submit revised offer" : "Submit Offer"}
         </Button>
       </div>
       {!hasRegisteredDsc(profile?.dsc) && (

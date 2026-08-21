@@ -3,6 +3,8 @@ import { ObjectId } from 'mongodb';
 import { collections } from '@/lib/db';
 import { requireAuth, isNextResponse, getProfileForUser } from '@/lib/auth-helpers';
 import { QUOTED_BID_STATUSES, vendorPublic } from '@/lib/comparison';
+import { originalVersion } from '@/lib/bid-revision';
+import { resolvedBidTotal } from '@/lib/bid-line';
 import { isOfferAuthorized } from '@/lib/tender-access';
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ tenderId: string }> }) {
@@ -82,7 +84,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ ten
       .map((bid) => ({
         _id: bid._id,
         status: bid.status,
-        totalPrice: bid.totalPrice,
+        totalPrice: resolvedBidTotal(bid),
         currency: bid.currency,
         validityDays: bid.validityDays,
         notes: bid.notes,
@@ -91,6 +93,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ ten
         lineItems: bid.lineItems ?? [],
         clauseResponses: bid.clauseResponses ?? [],
         submittedAt: bid.submittedAt,
+        originalVersion: originalVersion(bid),
+        revisedAt: bid.revisedAt ?? null,
+        revisionOpen: Boolean(bid.revisionRequest?.open),
         vendor: vendorById.get(bid.vendorProfileId.toString()),
       })),
     remarks: (tender.comparisonRemarks ?? []).slice().sort((a, b) => a.level - b.level),

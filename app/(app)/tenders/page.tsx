@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Search, FileText, CalendarClock, MapPin, Loader2, Building2, Pencil, DollarSign } from "lucide-react";
+import { Plus, Search, FileText, CalendarClock, MapPin, Loader2, Building2, Pencil, DollarSign, RefreshCw } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { PROCUREMENT_TYPES } from "@/lib/procurement";
 import { DeadlineCountdown } from "@/components/deadline-countdown";
@@ -246,12 +246,14 @@ function VendorTenderCard({ tender: t }: { tender: any }) {
         {submitted.length > 0 && (
           <div className="space-y-2 pt-1">
             {submitted.map((bid: any) => (
-              <Link key={bid._id} href={`/bids/${bid._id}`} className="block">
-                <div className="rounded-lg border border-border bg-muted/30 hover:bg-muted/50 p-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="flex items-center gap-2 mb-0.5">
+              <div key={bid._id} className="rounded-lg border border-border bg-muted/30 hover:bg-muted/50 p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <Link href={`/bids/${bid._id}`} className="block">
+                      <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                         <Badge variant={BID_STATUS_COLORS[bid.status] ?? "outline"}>{statusLabel(bid.status)}</Badge>
+                        {bid.revisionRequest?.open && <Badge variant="warning">Revision requested</Badge>}
+                        {bid.revisedAt && !bid.revisionRequest?.open && <Badge variant="outline">Revised</Badge>}
                         <span className="text-xs font-mono text-muted-foreground">#{String(bid._id).slice(-6)}</span>
                       </div>
                       <div className="text-xs text-muted-foreground">
@@ -259,16 +261,23 @@ function VendorTenderCard({ tender: t }: { tender: any }) {
                           ? `Submitted ${formatDistanceToNow(new Date(bid.submittedAt), { addSuffix: true })}`
                           : `Updated ${formatDistanceToNow(new Date(bid.updatedAt || bid.createdAt), { addSuffix: true })}`}
                       </div>
-                    </div>
-                    {bid.totalPrice != null && (
-                      <div className="text-sm font-semibold flex items-center gap-0.5">
-                        <DollarSign className="h-3.5 w-3.5" />
-                        {bid.currency} {Number(bid.totalPrice).toLocaleString()}
-                      </div>
+                    </Link>
+                    {bid.revisionRequest?.open && bid.revisionRequest.source === "vendor_invite" && (
+                      <Link href={`/bids/${bid._id}/edit`} className="inline-block mt-2">
+                        <Button size="sm" id={`revise-from-tender-${bid._id}`}>
+                          <RefreshCw className="h-3.5 w-3.5" /> Revise bid
+                        </Button>
+                      </Link>
                     )}
                   </div>
+                  {bid.totalPrice != null && (
+                    <Link href={`/bids/${bid._id}`} className="text-sm font-semibold flex items-center gap-0.5 shrink-0">
+                      <DollarSign className="h-3.5 w-3.5" />
+                      {bid.currency} {Number(bid.totalPrice).toLocaleString()}
+                    </Link>
+                  )}
                 </div>
-              </Link>
+              </div>
             ))}
           </div>
         )}

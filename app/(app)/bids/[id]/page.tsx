@@ -5,11 +5,23 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Loader2, ArrowLeft, Check, X, RotateCcw, SendHorizontal, Pencil, Ban, Eye, Printer } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Loader2, ArrowLeft, Check, X, RotateCcw, SendHorizontal, Pencil, Ban, Eye, Printer, RefreshCw, Phone } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { formatDistanceToNow } from "date-fns";
 import { clauseKey } from "@/lib/clauses";
 import { wordsDiffer } from "@/lib/text-diff";
@@ -25,11 +37,14 @@ const STATUS_COLORS: Record<string, "default" | "secondary" | "destructive" | "o
 
 export default function BidDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const router = useRouter();
   const { data: session } = useSession();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const user = (session as any)?.user;
   const qc = useQueryClient();
   const [confirmKind, setConfirmKind] = useState<OfferConfirmKind | null>(null);
+  const [askReviseOpen, setAskReviseOpen] = useState(false);
+  const [reviseNote, setReviseNote] = useState("");
 
   const { data: bid, isLoading } = useQuery({
     queryKey: ["bid", id],
@@ -98,6 +113,46 @@ export default function BidDetailPage({ params }: { params: Promise<{ id: string
     onError: (err: Error) => toast.error(err.message),
   });
 
+  const requestRevisionMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/bids/${id}/request-revision`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ note: reviseNote }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to request revision");
+      return data;
+    },
+    onSuccess: () => {
+      setAskReviseOpen(false);
+      setReviseNote("");
+      toast.success("Supplier invited to revise this offer");
+      qc.invalidateQueries({ queryKey: ["bid", id] });
+      qc.invalidateQueries({ queryKey: ["bids"] });
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const verbalRevisionMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/bids/${id}/open-verbal-revision`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ note: "Revised based on telephonic/verbal agreement" }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to open verbal revision");
+      return data;
+    },
+    onSuccess: () => {
+      toast.success("Enter the agreed prices, quantities, and terms");
+      qc.invalidateQueries({ queryKey: ["bid", id] });
+      router.push(`/bids/${id}/edit`);
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
   if (isLoading) return <div className="flex items-center justify-center py-16"><Loader2 className="animate-spin h-6 w-6 text-muted-foreground" /></div>;
   if (!bid) return <div className="text-center py-16 text-muted-foreground">Bid not found or access denied</div>;
 
@@ -142,6 +197,13 @@ export default function BidDetailPage({ params }: { params: Promise<{ id: string
               </Button>
             </Link>
           )}
+          {bid.canRevise && (
+            <Link href={`/bids/${id}/edit`}>
+              <Button size="sm" id="revise-bid-btn">
+                <RefreshCw /> Revise bid
+              </Button>
+            </Link>
+          )}
           {bid.status === "draft" && (
             <Button size="sm" onClick={() => setConfirmKind("submit")} disabled={submitMutation.isPending} id="submit-bid-btn">
               <SendHorizontal /> Submit
@@ -160,6 +222,30 @@ export default function BidDetailPage({ params }: { params: Promise<{ id: string
           )}
         </div>
       )}
+      {isVendorOwner && bid.revisionRequest?.open && bid.revisionRequest.source === "vendor_invite" && (
+        <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 text-sm">
+          <p className="font-medium">The company has invited you to revise this offer.</p>
+          {bid.revisionRequest.note && <p className="text-muted-foreground mt-1">{bid.revisionRequest.note}</p>}
+          <p className="text-muted-foreground mt-1">Use Revise bid to update prices, quantities, or terms, then submit the revised offer. Your original submission stays in history.</p>
+        </div>
+      )}
+
+      {isCompanyOwner && bid.revisionRequest?.open && (
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 text-sm">
+          <p className="font-medium">
+            {bid.revisionRequest.source === "company_verbal"
+              ? "Verbal-agreement revision is in progress."
+              : "Waiting for the supplier to submit a revised offer."}
+          </p>
+          {bid.revisionRequest.note && <p className="text-muted-foreground mt-1">{bid.revisionRequest.note}</p>}
+          {bid.canVerbalRevise && (
+            <Link href={`/bids/${id}/edit`} className="inline-block mt-2">
+              <Button size="sm">Continue revising</Button>
+            </Link>
+          )}
+        </div>
+      )}
+
       {isCompanyOwner && (
         <div className="flex flex-wrap gap-2">
           <Link href={`/bids/${id}/preview`}>
@@ -172,6 +258,22 @@ export default function BidDetailPage({ params }: { params: Promise<{ id: string
               <Printer /> Print
             </Button>
           </Link>
+          {bid.canRequestRevision && (
+            <Button size="sm" variant="outline" onClick={() => setAskReviseOpen(true)} id="ask-revise-btn">
+              <RefreshCw /> Ask to revise
+            </Button>
+          )}
+          {bid.canOpenVerbalRevision && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => { if (confirm("Capture the prices, quantities, and terms agreed on the phone? The original offer is kept in history.")) verbalRevisionMutation.mutate(); }}
+              disabled={verbalRevisionMutation.isPending}
+              id="verbal-revise-btn"
+            >
+              <Phone /> Revise bid based on telephonic/verbal agreement
+            </Button>
+          )}
         </div>
       )}
 
@@ -194,6 +296,13 @@ export default function BidDetailPage({ params }: { params: Promise<{ id: string
               <Ban /> Blacklist supplier
             </Button>
           )}
+        </div>
+      )}
+      {isCompanyOwner && bid.status === "under_review" && (
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" onClick={() => statusMutation.mutate("shortlisted")} id="shortlist-review-btn">Shortlist</Button>
+          <Button size="sm" onClick={() => statusMutation.mutate("accepted")} id="accept-review-btn"><Check /> Accept</Button>
+          <Button size="sm" variant="outline" onClick={() => statusMutation.mutate("rejected")} id="reject-review-btn"><X /> Reject</Button>
         </div>
       )}
       {isCompanyOwner && bid.status === "shortlisted" && (
@@ -341,6 +450,28 @@ export default function BidDetailPage({ params }: { params: Promise<{ id: string
         </Card>
       )}
 
+      {bid.versions?.length > 0 && (
+        <Card>
+          <CardHeader><CardTitle className="text-base">Original and revised versions</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            {bid.versions.map((v: any) => (
+              <div key={`${v.kind}-${v.version}`} className="rounded-lg border border-border p-3 text-sm">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant={v.kind === "original" ? "outline" : "success"}>{v.kind} · v{v.version}</Badge>
+                  <span className="text-xs text-muted-foreground">
+                    {v.source === "company_verbal" ? "Verbal agreement" : v.source === "vendor_invite" ? "Supplier revision" : "Original submit"}
+                    {v.capturedBy ? ` · ${v.capturedBy}` : ""}
+                  </span>
+                </div>
+                <div className="mt-1 font-semibold">{v.currency} {Number(v.totalPrice || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                {v.capturedAt && <div className="text-xs text-muted-foreground">{formatDistanceToNow(new Date(v.capturedAt), { addSuffix: true })}</div>}
+              </div>
+            ))}
+            {bid.revisedAt && <p className="text-xs text-muted-foreground">Comparison uses the latest revised offer unless you choose to include the original.</p>}
+          </CardContent>
+        </Card>
+      )}
+
       {isVendorOwner && confirmKind && (
         <OfferConfirmDialog
           open={Boolean(confirmKind)}
@@ -354,6 +485,33 @@ export default function BidDetailPage({ params }: { params: Promise<{ id: string
           }}
         />
       )}
+
+      <AlertDialog open={askReviseOpen} onOpenChange={setAskReviseOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Ask supplier to revise this offer</AlertDialogTitle>
+            <AlertDialogDescription>
+              The original submission is kept in history. The supplier gets a Revise bid button to update prices, quantities, and terms.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-1.5">
+            <Label htmlFor="revise-note">Note to supplier (optional)</Label>
+            <Textarea
+              id="revise-note"
+              rows={3}
+              value={reviseNote}
+              onChange={(e) => setReviseNote(e.target.value)}
+              placeholder="e.g. Please revise packing quantity and payment terms"
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <Button onClick={() => requestRevisionMutation.mutate()} disabled={requestRevisionMutation.isPending} id="confirm-ask-revise-btn">
+              {requestRevisionMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Send invitation"}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
     {showThread && (
       <OfferThreadPanel

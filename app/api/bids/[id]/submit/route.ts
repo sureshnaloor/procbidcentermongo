@@ -8,6 +8,7 @@ import { matchesClause } from '@/lib/clauses';
 import { hasRegisteredDsc, dscIsValidOn } from '@/lib/dsc';
 import { hashBidDocument } from '@/lib/bid-hash';
 import { saveBidSignatureFile } from '@/lib/bid-files';
+import { resolvedBidTotal } from '@/lib/bid-line';
 import type { IBidSignature } from '@/lib/types';
 
 const submitBody = z.object({
@@ -56,6 +57,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const now = new Date();
   const setFields: Record<string, unknown> = { status: 'submitted', submittedAt: now, updatedAt: now };
+  const fromLines = resolvedBidTotal(bid);
+  if (fromLines != null) setFields.totalPrice = fromLines;
 
   if (hasRegisteredDsc(profile.dsc)) {
     if (!payload?.signWithDsc) {

@@ -119,3 +119,17 @@ export function formatDelivery(item: {
   if (mode === 'working_weeks') return `${value} working week${value === 1 ? '' : 's'}`;
   return `${value} day${value === 1 ? '' : 's'}`;
 }
+
+export function lineItemsTotal(lineItems?: Array<{ quantity?: number; unitPrice?: number; totalPrice?: number }> | null): number {
+  return (lineItems ?? []).reduce((sum, item) => {
+    const computed = Number(item.quantity || 0) * Number(item.unitPrice || 0);
+    return sum + (Number.isFinite(computed) ? computed : 0);
+  }, 0);
+}
+
+export function resolvedBidTotal(bid: { totalPrice?: number | null; lineItems?: Array<{ quantity?: number; unitPrice?: number; totalPrice?: number }> | null }): number | undefined {
+  const fromLines = lineItemsTotal(bid.lineItems);
+  if ((bid.lineItems?.length ?? 0) > 0) return fromLines;
+  if (bid.totalPrice == null || Number.isNaN(Number(bid.totalPrice))) return undefined;
+  return Number(bid.totalPrice);
+}

@@ -211,8 +211,53 @@ export interface IBid {
   signature?: IBidSignature;
   lineItems: IBidLineItem[];
   clauseResponses?: IBidClauseResponse[];
+  versions?: IBidVersionSnapshot[];
+  revisionRequest?: IBidRevisionRequest;
+  revisionDraft?: IBidRevisionDraft;
+  revisedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
+}
+
+export type BidRevisionSource = 'vendor_invite' | 'company_verbal' | 'original_submit';
+
+export interface IBidRevisionRequest {
+  open: boolean;
+  source: 'vendor_invite' | 'company_verbal';
+  note?: string;
+  requestedAt: Date;
+  requestedBy: string;
+}
+
+export interface IBidRevisionDraft {
+  totalPrice?: number;
+  currency?: string;
+  validityDays?: number;
+  technicalProposal?: string;
+  commercialProposal?: string;
+  notes?: string;
+  lineItems?: IBidLineItem[];
+  clauseResponses?: IBidClauseResponse[];
+  savedAt: Date;
+}
+
+export interface IBidVersionSnapshot {
+  version: number;
+  kind: 'original' | 'revised';
+  source: BidRevisionSource;
+  capturedAt: Date;
+  capturedBy: string;
+  note?: string;
+  status: BidStatus;
+  totalPrice?: number;
+  currency: string;
+  validityDays: number;
+  technicalProposal?: string;
+  commercialProposal?: string;
+  notes?: string;
+  lineItems: IBidLineItem[];
+  clauseResponses?: IBidClauseResponse[];
+  submittedAt?: Date;
 }
 
 export interface IBidClauseResponse {
@@ -333,7 +378,8 @@ export type NotificationType =
   | 'tender_invite'
   | 'invite_requested'
   | 'invite_accepted'
-  | 'invite_declined';
+  | 'invite_declined'
+  | 'revision_requested';
 
 export interface INotification {
   _id?: ObjectId;
