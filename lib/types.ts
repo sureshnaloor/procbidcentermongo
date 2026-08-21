@@ -1,0 +1,296 @@
+import type { ObjectId } from 'mongodb';
+
+// ─── Auth ───────────────────────────────────────────────────────────────────
+export interface IUser {
+  _id?: ObjectId;
+  username: string;
+  email: string;
+  passwordHash: string;
+  displayName?: string;
+  role: 'user' | 'admin';
+  createdAt: Date;
+  updatedAt?: Date;
+}
+
+// ─── Profile ─────────────────────────────────────────────────────────────────
+export interface IProfile {
+  _id?: ObjectId;
+  userId: ObjectId;
+  userType: 'company' | 'vendor';
+  companyName?: string;
+  registrationNumber?: string;
+  contactPerson?: string;
+  phone?: string;
+  address?: string;
+  country?: string;
+  city?: string;
+  website?: string;
+  description?: string;
+  logoUrl?: string;
+  yearEstablished?: number;
+  employeeCount?: number;
+  annualTurnover?: number;
+  turnoverCurrency?: string;
+  turnoverYear?: number;
+  taxId?: string;
+  industry?: string;
+  isVerified: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// ─── Master Data ─────────────────────────────────────────────────────────────
+export interface IMaterialServiceType {
+  _id?: ObjectId;
+  category: 'material' | 'service';
+  name: string;
+  description?: string;
+  createdAt: Date;
+}
+
+export interface IMaterialServiceGroup {
+  _id?: ObjectId;
+  typeId: ObjectId;
+  name: string;
+  description?: string;
+  createdAt: Date;
+}
+
+export interface IMaterialServiceItem {
+  _id?: ObjectId;
+  groupId: ObjectId;
+  code: string;
+  description?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// ─── Tender ──────────────────────────────────────────────────────────────────
+export type TenderStatus = 'draft' | 'published' | 'closed' | 'awarded' | 'cancelled';
+export type TenderType = 'rfp' | 'rfq' | 'tender';
+export type TenderDocumentCategory = 'drawing' | 'terms' | 'other';
+export type ClauseKind = 'safety' | 'quality' | 'payment' | 'delivery' | 'compliance' | 'scope' | 'legal' | 'custom';
+
+export interface ITenderClause {
+  kind: ClauseKind;
+  slug?: string;
+  title: string;
+  body: string;
+  required: boolean;
+}
+
+export interface IClauseTemplate {
+  _id?: ObjectId;
+  kind: ClauseKind;
+  slug?: string;
+  title: string;
+  body: string;
+  isSystem: boolean;
+  companyProfileId?: ObjectId;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface ITenderDocument {
+  _id?: ObjectId;
+  category: TenderDocumentCategory;
+  name: string;
+  fileUrl: string;
+  storedName: string;
+  fileType?: string;
+  fileSize?: number;
+  createdAt: Date;
+}
+
+export interface ITender {
+  _id?: ObjectId;
+  companyProfileId: ObjectId;
+  title: string;
+  description?: string;
+  type: TenderType;
+  status: TenderStatus;
+  bidDeadline?: Date;
+  deliveryDeadline?: Date;
+  estimatedValue?: number;
+  currency: string;
+  location?: string;
+  requirements?: string;
+  termsConditions?: string;
+  groupIds: ObjectId[];
+  clauses?: ITenderClause[];
+  documents: ITenderDocument[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// ─── Bid ─────────────────────────────────────────────────────────────────────
+export type BidStatus = 'draft' | 'submitted' | 'under_review' | 'shortlisted' | 'accepted' | 'rejected' | 'withdrawn';
+
+export interface IBidLineItem {
+  _id?: ObjectId;
+  description: string;
+  quantity: number;
+  unit: string;
+  unitPrice: number;
+  totalPrice: number;
+  deliveryDays?: number;
+  notes?: string;
+}
+
+export interface IBid {
+  _id?: ObjectId;
+  tenderId: ObjectId;
+  vendorProfileId: ObjectId;
+  status: BidStatus;
+  totalPrice?: number;
+  currency: string;
+  validityDays: number;
+  technicalProposal?: string;
+  commercialProposal?: string;
+  notes?: string;
+  submittedAt?: Date;
+  lineItems: IBidLineItem[];
+  clauseResponses?: IBidClauseResponse[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface IBidClauseResponse {
+  kind: ClauseKind;
+  slug?: string;
+  accepted: boolean;
+  comments?: string;
+}
+
+export interface IBidHistory {
+  _id?: ObjectId;
+  bidId: ObjectId;
+  fieldName: string;
+  oldValue?: string;
+  newValue?: string;
+  changedBy: string;
+  createdAt: Date;
+}
+
+// ─── Vendor Qualifications ───────────────────────────────────────────────────
+export type QualificationStatus = 'pending' | 'approved' | 'rejected';
+
+export type TenderInviteStatus = 'invited' | 'requested' | 'accepted' | 'declined' | 'revoked';
+
+export interface ITenderInvite {
+  _id?: ObjectId;
+  tenderId: ObjectId;
+  companyProfileId: ObjectId;
+  vendorProfileId: ObjectId;
+  status: TenderInviteStatus;
+  note?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface IVendorQualification {
+  _id?: ObjectId;
+  profileId: ObjectId;
+  groupId: ObjectId;
+  status: QualificationStatus;
+  qualifiedBy?: ObjectId;
+  notes?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// ─── Documents ───────────────────────────────────────────────────────────────
+export type DocumentVisibility = 'public' | 'private' | 'selected';
+
+export interface IDocument {
+  _id?: ObjectId;
+  profileId: ObjectId;
+  name: string;
+  fileUrl: string;
+  storedName?: string;
+  fileType?: string;
+  fileSize?: number;
+  visibility: DocumentVisibility;
+  category?: string;
+  description?: string;
+  grantedToProfileIds: ObjectId[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// ─── Messages ────────────────────────────────────────────────────────────────
+export type MessageKind = 'dm' | 'channel';
+export type ChannelKind = 'information' | 'announcement' | 'alert' | 'general';
+
+export interface IMessage {
+  _id?: ObjectId;
+  senderProfileId?: ObjectId;
+  receiverProfileId?: ObjectId;
+  channelId?: ObjectId;
+  kind: MessageKind;
+  visibility: 'private' | 'public';
+  tenderId?: ObjectId;
+  bidId?: ObjectId;
+  subject?: string;
+  content: string;
+  isRead: boolean;
+  editedAt?: Date;
+  createdAt: Date;
+}
+
+export interface IMessageChannel {
+  _id?: ObjectId;
+  name: string;
+  slug: string;
+  description?: string;
+  kind: ChannelKind;
+  isSystem?: boolean;
+  createdByUserId?: ObjectId;
+  createdAt: Date;
+}
+
+// ─── Notifications ───────────────────────────────────────────────────────────
+export type NotificationType =
+  | 'tender_published'
+  | 'bid_received'
+  | 'bid_status_changed'
+  | 'bid_deadline'
+  | 'vendor_qualified'
+  | 'message_received'
+  | 'tender_invite'
+  | 'invite_requested'
+  | 'invite_accepted'
+  | 'invite_declined';
+
+export interface INotification {
+  _id?: ObjectId;
+  profileId: ObjectId;
+  type: NotificationType;
+  title: string;
+  content?: string;
+  relatedId?: ObjectId;
+  relatedType?: string;
+  isRead: boolean;
+  createdAt: Date;
+}
+
+// ─── Contact ─────────────────────────────────────────────────────────────────
+export interface IContactSubmission {
+  _id?: ObjectId;
+  name: string;
+  email: string;
+  subject: string;
+  message: string;
+  createdAt: Date;
+}
+
+// ─── Session ─────────────────────────────────────────────────────────────────
+export interface SessionUser {
+  id: string;
+  username: string;
+  displayName: string;
+  email: string;
+  role: 'user' | 'admin';
+  isSuperAdmin: boolean;
+  userType?: 'company' | 'vendor' | null;
+}
