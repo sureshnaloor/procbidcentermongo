@@ -15,7 +15,7 @@ export default middlewareAuth((req) => {
   // Protect app routes
   const protectedPaths = [
     '/dashboard', '/tenders', '/bids', '/profile', '/documents',
-    '/messages', '/vendors', '/settings', '/companies',
+    '/messages', '/vendors', '/settings', '/companies', '/comparisons',
   ];
   const isProtected = protectedPaths.some((p) => pathname.startsWith(p)) || pathname.startsWith('/offer');
   if (isProtected && !isLoggedIn) {
@@ -27,7 +27,7 @@ export default middlewareAuth((req) => {
   // Suppliers may participate in tenders (prepare offers) but cannot create or edit them
   const userType = session?.user && (session.user as { userType?: string | null }).userType;
   if (userType === 'vendor') {
-    if (pathname === '/tenders/new' || /^\/tenders\/[^/]+\/edit$/.test(pathname)) {
+    if (pathname === '/tenders/new' || /^\/tenders\/[^/]+\/edit$/.test(pathname) || pathname.startsWith('/comparisons')) {
       return NextResponse.redirect(new URL('/tenders', req.url));
     }
   }

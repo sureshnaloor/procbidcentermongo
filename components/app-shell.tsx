@@ -19,6 +19,7 @@ import {
   LogOut,
   Bell,
   Building2,
+  Scale,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -65,13 +66,19 @@ export default function AppShell({ session, children }: AppShellProps) {
     ? notifData.filter((n: any) => !n.isRead).length
     : 0;
 
-  const menuItems = [
+  type MenuItem = { label: string; href: string; icon: React.ElementType; badge?: number };
+  const menuItems: MenuItem[] = [
     { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
     { label: "Tenders", href: "/tenders", icon: FileText },
     { label: "Bids", href: "/bids", icon: Package },
+  ];
+  if (userType !== "vendor") {
+    menuItems.push({ label: "Comparison of Bids", href: "/comparisons", icon: Scale });
+  }
+  menuItems.push(
     { label: "Documents", href: "/documents", icon: FolderOpen },
     { label: "Messages", href: "/messages", icon: MessageSquare, badge: unreadMessagesCount },
-  ];
+  );
 
   if (userType !== "vendor") {
     menuItems.push({ label: "Suppliers", href: "/vendors", icon: Users });
@@ -88,8 +95,10 @@ export default function AppShell({ session, children }: AppShellProps) {
   const secondaryMenuItems = [{ label: "Settings", href: "/settings", icon: Settings }];
 
   function getPageTitle() {
-    const activeItem = [...menuItems, ...secondaryMenuItems].find((item) => pathname.startsWith(item.href));
-    return activeItem?.label ?? "ProSource";
+    const ranked = [...menuItems, ...secondaryMenuItems]
+      .filter((item) => pathname === item.href || pathname.startsWith(`${item.href}/`))
+      .sort((a, b) => b.href.length - a.href.length);
+    return ranked[0]?.label ?? "ProSource";
   }
 
   const handleSignOut = () => {
@@ -118,7 +127,7 @@ export default function AppShell({ session, children }: AppShellProps) {
         {/* Navigation */}
         <nav className="flex-1 p-4 space-y-1">
           {menuItems.map((item) => {
-            const isActive = pathname.startsWith(item.href);
+            const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
             return (
               <Link key={item.label} href={item.href} className={navLinkClass(isActive)}>
                 <item.icon className="h-4 w-4" />
@@ -185,7 +194,7 @@ export default function AppShell({ session, children }: AppShellProps) {
 
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
           {menuItems.map((item) => {
-            const isActive = pathname.startsWith(item.href);
+            const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
             return (
               <Link
                 key={item.label}

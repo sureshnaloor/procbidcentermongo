@@ -19,6 +19,8 @@ import {
   CUSTOM_FIELD_SUGGESTIONS,
   DELIVERY_MODES,
   MAX_CUSTOM_FIELDS,
+  MIN_QTY_CHANGE_REASON,
+  quantityChangeError,
   type DeliveryMode,
 } from "@/lib/bid-line";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -33,6 +35,9 @@ interface CustomField {
 interface LineItem {
   description: string;
   quantity: string;
+  originalQuantity: number | null;
+  quantityUnlocked: boolean;
+  quantityChangeReason: string;
   unit: string;
   unitPrice: string;
   notes: string;
@@ -46,6 +51,9 @@ function emptyLine(): LineItem {
   return {
     description: "",
     quantity: "1",
+    originalQuantity: null,
+    quantityUnlocked: true,
+    quantityChangeReason: "",
     unit: "unit",
     unitPrice: "",
     notes: "",
@@ -62,9 +70,17 @@ function lineFromStored(item: any): LineItem {
     const d = new Date(item.deliveryDate);
     if (!Number.isNaN(d.getTime())) deliveryDate = d.toISOString().slice(0, 10);
   }
+  const originalQuantity = item.originalQuantity != null && Number.isFinite(Number(item.originalQuantity))
+    ? Number(item.originalQuantity)
+    : null;
+  const quantity = item.quantity != null ? String(item.quantity) : "";
+  const changed = originalQuantity != null && Number(item.quantity) !== originalQuantity;
   return {
     description: item.description || "",
-    quantity: item.quantity != null ? String(item.quantity) : "",
+    quantity,
+    originalQuantity,
+    quantityUnlocked: originalQuantity == null || changed,
+    quantityChangeReason: item.quantityChangeReason || "",
     unit: item.unit || "unit",
     unitPrice: item.unitPrice != null ? String(item.unitPrice) : "",
     notes: item.notes || "",
@@ -114,6 +130,8 @@ function buildPayload(tender: any, form: any, lineItems: LineItem[], clauseModes
     lineItems: lineItems.filter((l) => l.description.trim()).map((l) => ({
       description: l.description.trim(),
       quantity: parseAmount(l.quantity),
+      originalQuantity: l.originalQuantity ?? undefined,
+      quantityChangeReason: l.quantityChangeReason.trim() || undefined,
       unit: l.unit.trim() || "unit",
       unitPrice: parseAmount(l.unitPrice),
       notes: l.notes.trim() || undefined,
@@ -166,6 +184,8 @@ export function BidForm({ tender, bid, mode }: { tender: any; bid?: any; mode: "
         ...emptyLine(),
         description: item.description,
         quantity: String(item.quantity),
+        originalQuantity: Number(item.quantity),
+        quantityUnlocked: false,
         unit: item.unit || "unit",
       }));
     if (seeded.length > 0) {
@@ -218,9 +238,23 @@ export function BidForm({ tender, bid, mode }: { tender: any; bid?: any; mode: "
 
   const currency = form.currency.trim() || "USD";
   const lineTotal = lineItems.reduce((sum, l) => sum + parseAmount(l.quantity) * parseAmount(l.unitPrice), 0);
+  const computedTotal = lineTotal;
+
+  function quantityIssue(line: LineItem) {
+    if (line.originalQuantity == null) return null;
+    return quantityChangeError({
+      quantity: parseAmount(line.quantity),
+      originalQuantity: line.originalQuantity,
+      quantityChangeReason: line.quantityChangeReason,
+    });
+  }
 
   const mutation = useMutation({
     mutationFn: async (opts: { draft: boolean; preview?: boolean } & OfferConfirmPayload) => {
+      const qtyIssue = lineItems.find((line) => line.description.trim() && quantityIssue(line));
+      if (qtyIssue) {
+        throw new Error(`${qtyIssue.description || "A line item"}: ${quantityIssue(qtyIssue)}`);
+      }
       if (!opts.draft) {
         const required = (tender?.clauses ?? []).filter((c: any) => c.required);
         const missing = required.find((c: any) => {
@@ -287,7 +321,8 @@ export function BidForm({ tender, bid, mode }: { tender: any; bid?: any; mode: "
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="bid-total-price">Offer total (optional override)</Label>
-            <Input type="number" value={form.totalPrice} onChange={(e) => setField("totalPrice", e.target.value)} placeholder={lineTotal ? formatAmount(lineTotal) : "0.00"} id="bid-total-price" />
+            <Input type="number" value={form.totalPrice} onChange={(e) => setField("totalPrice", e.target.value)} placeholder={computedTotal ? formatAmount(computedTotal) : "0.00"} id="bid-total-price" />
+            <p className="text-[11px] text-muted-foreground">Leave blank to use the sum of line totals ({currency} {formatAmount(computedTotal)}).</p>
           </div>
         </CardContent>
       </Card>
@@ -299,12 +334,15 @@ export function BidForm({ tender, bid, mode }: { tender: any; bid?: any; mode: "
         </CardHeader>
         <CardContent className="space-y-4">
           {boqSeeded && mode === "create" && (
-            <p className="text-xs text-muted-foreground">Quantities were copied from the buyer&apos;s BOQ. Enter your unit prices in {currency}.</p>
+            <p className="text-xs text-muted-foreground">Quantities were copied from the buyer&apos;s BOQ. Use Change quantity if you must quote a different MOQ or packing quantity, and give a justification.</p>
           )}
           {lineItems.map((line, i) => {
             const qty = parseAmount(line.quantity);
             const unitPrice = parseAmount(line.unitPrice);
             const total = qty * unitPrice;
+            const locked = line.originalQuantity != null && !line.quantityUnlocked;
+            const qtyChanged = line.originalQuantity != null && qty !== line.originalQuantity;
+            const qtyError = quantityIssue(line);
             return (
               <div key={i} className="rounded-lg border border-border p-3 space-y-3">
                 <div className="flex items-start justify-between gap-2">
@@ -318,8 +356,50 @@ export function BidForm({ tender, bid, mode }: { tender: any; bid?: any; mode: "
                 </div>
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                   <div className="space-y-1.5">
-                    <Label htmlFor={`line-qty-${i}`}>Quantity</Label>
-                    <Input id={`line-qty-${i}`} type="number" min={0} step="any" placeholder="0" value={line.quantity} onChange={(e) => setLine(i, { quantity: e.target.value })} />
+                    <div className="flex items-center justify-between gap-2">
+                      <Label htmlFor={`line-qty-${i}`}>Quantity</Label>
+                      {line.originalQuantity != null && (
+                        locked ? (
+                          <button
+                            type="button"
+                            className="text-[11px] font-medium text-primary hover:underline"
+                            onClick={() => setLine(i, { quantityUnlocked: true })}
+                            id={`change-qty-${i}`}
+                          >
+                            Change quantity
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            className="text-[11px] font-medium text-muted-foreground hover:underline"
+                            onClick={() => setLine(i, {
+                              quantityUnlocked: false,
+                              quantity: String(line.originalQuantity),
+                              quantityChangeReason: "",
+                            })}
+                            id={`reset-qty-${i}`}
+                          >
+                            Use original qty
+                          </button>
+                        )
+                      )}
+                    </div>
+                    <Input
+                      id={`line-qty-${i}`}
+                      type="number"
+                      min={0}
+                      step="any"
+                      placeholder="0"
+                      value={line.quantity}
+                      disabled={locked}
+                      onChange={(e) => setLine(i, { quantity: e.target.value })}
+                    />
+                    {line.originalQuantity != null && (
+                      <p className="text-[11px] text-muted-foreground">
+                        Invited qty: {line.originalQuantity}
+                        {qtyChanged ? ` → ${qty || 0}` : ""}
+                      </p>
+                    )}
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor={`line-unit-${i}`}>Unit</Label>
@@ -336,6 +416,23 @@ export function BidForm({ tender, bid, mode }: { tender: any; bid?: any; mode: "
                     </div>
                   </div>
                 </div>
+                {line.originalQuantity != null && line.quantityUnlocked && (
+                  <div className="space-y-1.5">
+                    <Label htmlFor={`line-qty-reason-${i}`}>
+                      Quantity change justification{qtyChanged ? " (required)" : ""}
+                    </Label>
+                    <Textarea
+                      id={`line-qty-reason-${i}`}
+                      rows={2}
+                      placeholder="e.g. Minimum order quantity is 50 NOS / packing is in lots of 12"
+                      value={line.quantityChangeReason}
+                      onChange={(e) => setLine(i, { quantityChangeReason: e.target.value })}
+                    />
+                    <p className={`text-[11px] ${qtyError ? "text-destructive" : "text-muted-foreground"}`}>
+                      {qtyError || `Required when the offered quantity differs from the invited quantity (min ${MIN_QTY_CHANGE_REASON} characters). Line and bid totals update automatically.`}
+                    </p>
+                  </div>
+                )}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1.5">
                     <Label>Delivery</Label>

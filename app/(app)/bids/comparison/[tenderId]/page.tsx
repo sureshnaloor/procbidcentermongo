@@ -143,6 +143,12 @@ export default function BidComparisonPage({ params }: { params: Promise<{ tender
           </div>
         </div>
       )}
+
+      <div className="print:hidden">
+        <Link href={`/comparisons/${tenderId}`}>
+          <Button size="sm" variant="outline">Open comparison statement</Button>
+        </Link>
+      </div>
     </div>
   );
 }

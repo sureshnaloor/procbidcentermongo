@@ -22,6 +22,8 @@ const updateSchema = z.object({
   turnoverYear: z.number().int().min(1900).max(2100).optional().nullable(),
   taxId: z.string().optional(),
   industry: z.string().optional(),
+  designation: z.string().max(80).optional(),
+  capabilityGroupIds: z.array(z.string()).optional(),
   dsc: z.object({
     enabled: z.boolean(),
     holderName: z.string().max(120).optional(),
@@ -37,12 +39,24 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   if (isNextResponse(auth)) return auth;
   const { id } = await params;
   if (!ObjectId.isValid(id)) return NextResponse.json(null);
-  const { profiles, documents } = await collections();
+  const { profiles, documents, materialServiceGroups, materialServiceTypes } = await collections();
   const profile = await profiles.findOne({ _id: new ObjectId(id) });
   if (!profile) return NextResponse.json(null);
   const publicDocs = await documents.find({ profileId: profile._id!, visibility: 'public' }).sort({ createdAt: -1 }).toArray();
+  const groupIds = profile.capabilityGroupIds ?? [];
+  const [groups, types] = await Promise.all([
+    groupIds.length ? materialServiceGroups.find({ _id: { $in: groupIds } }).toArray() : Promise.resolve([]),
+    groupIds.length ? materialServiceTypes.find({}).toArray() : Promise.resolve([]),
+  ]);
+  const typeById = new Map(types.map((t) => [t._id!.toString(), t]));
+  const capabilityGroups = groups.map((g) => ({
+    _id: g._id,
+    name: g.name,
+    description: g.description,
+    category: typeById.get(g.typeId.toString())?.category ?? 'material',
+  }));
   const { userId: _userId, ...safe } = profile;
-  return NextResponse.json({ ...safe, publicDocuments: publicDocs });
+  return NextResponse.json({ ...safe, publicDocuments: publicDocs, capabilityGroups });
 }
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -82,6 +96,12 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         validFrom: dsc.validFrom ? new Date(dsc.validFrom) : undefined,
         validTo: dsc.validTo ? new Date(dsc.validTo) : undefined,
       };
+      continue;
+    }
+    if (key === 'capabilityGroupIds' && Array.isArray(value)) {
+      set.capabilityGroupIds = value
+        .filter((id): id is string => typeof id === 'string' && ObjectId.isValid(id))
+        .map((id) => new ObjectId(id));
       continue;
     }
     if (value === null) unset[key] = '';

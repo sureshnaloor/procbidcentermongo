@@ -123,11 +123,16 @@ export default function BidsPage() {
                           </div>
                         )}
                       </div>
-                      {nested.length > 1 && (
-                        <Link href={`/bids/comparison/${tender._id}`}>
-                          <Button size="sm" variant="outline" id={`compare-${tender._id}`}>Compare</Button>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Link href={`/comparisons/${tender._id}`}>
+                          <Button size="sm" variant="outline" id={`statement-${tender._id}`}>Statement</Button>
                         </Link>
-                      )}
+                        {nested.length > 1 && (
+                          <Link href={`/bids/comparison/${tender._id}`}>
+                            <Button size="sm" variant="outline" id={`compare-${tender._id}`}>Compare</Button>
+                          </Link>
+                        )}
+                      </div>
                     </div>
                   </CardHeader>
                   <CardContent className="p-4 space-y-3">

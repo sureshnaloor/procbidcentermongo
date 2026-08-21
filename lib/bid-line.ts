@@ -19,6 +19,7 @@ export const CUSTOM_FIELD_SUGGESTIONS = [
 ] as const;
 
 export const MAX_CUSTOM_FIELDS = 6;
+export const MIN_QTY_CHANGE_REASON = 15;
 
 export const bidLineCustomFieldInput = z.object({
   label: z.string().min(1).max(80),
@@ -28,6 +29,8 @@ export const bidLineCustomFieldInput = z.object({
 export const bidLineItemInput = z.object({
   description: z.string(),
   quantity: z.number(),
+  originalQuantity: z.number().optional(),
+  quantityChangeReason: z.string().max(1000).optional(),
   unit: z.string(),
   unitPrice: z.number(),
   deliveryDays: z.number().optional(),
@@ -36,7 +39,34 @@ export const bidLineItemInput = z.object({
   deliveryDate: z.string().optional(),
   notes: z.string().optional(),
   customFields: z.array(bidLineCustomFieldInput).max(MAX_CUSTOM_FIELDS).optional(),
+}).superRefine((item, ctx) => {
+  const error = quantityChangeError({
+    quantity: item.quantity,
+    originalQuantity: item.originalQuantity,
+    quantityChangeReason: item.quantityChangeReason,
+  });
+  if (error) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['quantityChangeReason'], message: error });
+  }
 });
+
+export function quantityWasChanged(item: { quantity?: number; originalQuantity?: number | null }): boolean {
+  if (item.originalQuantity == null) return false;
+  return Number(item.quantity) !== Number(item.originalQuantity);
+}
+
+export function quantityChangeError(item: {
+  quantity?: number;
+  originalQuantity?: number | null;
+  quantityChangeReason?: string;
+}): string | null {
+  if (!quantityWasChanged(item)) return null;
+  const reason = item.quantityChangeReason?.trim() ?? '';
+  if (reason.length < MIN_QTY_CHANGE_REASON) {
+    return `A clear justification is required when quantity is changed (at least ${MIN_QTY_CHANGE_REASON} characters).`;
+  }
+  return null;
+}
 
 export function normalizeStoredLineItem(item: z.infer<typeof bidLineItemInput>) {
   const mode = item.deliveryMode ?? (item.deliveryDays ? 'days' : undefined);
@@ -46,9 +76,15 @@ export function normalizeStoredLineItem(item: z.infer<typeof bidLineItemInput>) 
   const deliveryValue = mode && mode !== 'date'
     ? (item.deliveryValue ?? item.deliveryDays)
     : undefined;
+  const originalQuantity = item.originalQuantity != null && Number.isFinite(item.originalQuantity)
+    ? item.originalQuantity
+    : undefined;
+  const changed = originalQuantity != null && item.quantity !== originalQuantity;
   return {
     description: item.description,
     quantity: item.quantity,
+    originalQuantity,
+    quantityChangeReason: changed ? item.quantityChangeReason?.trim() || undefined : undefined,
     unit: item.unit,
     unitPrice: item.unitPrice,
     totalPrice: item.quantity * item.unitPrice,

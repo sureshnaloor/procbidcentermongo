@@ -15,6 +15,7 @@ const createSchema = z.object({
   city: z.string().optional(),
   website: z.string().optional(),
   description: z.string().optional(),
+  capabilityGroupIds: z.array(z.string()).optional(),
 });
 
 export async function GET() {
@@ -48,6 +49,9 @@ export async function POST(req: NextRequest) {
     city: data.city,
     website: data.website,
     description: data.description,
+    capabilityGroupIds: (data.capabilityGroupIds ?? [])
+      .filter((id) => ObjectId.isValid(id))
+      .map((id) => new ObjectId(id)),
     isVerified: false,
     createdAt: now,
     updatedAt: now,

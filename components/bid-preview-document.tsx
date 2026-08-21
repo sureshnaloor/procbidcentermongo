@@ -64,11 +64,16 @@ export function BidPreviewDocument({ bid }: { bid: any }) {
                   <td className="py-2 pr-2">
                     <div>{item.description}</div>
                     {item.notes && <div className="text-xs text-black/60 mt-0.5 whitespace-pre-wrap">Remarks: {item.notes}</div>}
+                    {item.originalQuantity != null && Number(item.quantity) !== Number(item.originalQuantity) && (
+                      <div className="text-xs text-black/70 mt-0.5">
+                        Quantity changed from {item.originalQuantity}{item.quantityChangeReason ? `: ${item.quantityChangeReason}` : ""}
+                      </div>
+                    )}
                     {item.customFields?.map((field: any, fi: number) => (
                       <div key={fi} className="text-xs text-black/60">{field.label}: {field.value}</div>
                     ))}
                   </td>
-                  <td className="py-2 text-right">{item.quantity}</td>
+                  <td className="py-2 text-right">{item.quantity}{item.originalQuantity != null && Number(item.quantity) !== Number(item.originalQuantity) ? ` (was ${item.originalQuantity})` : ""}</td>
                   <td className="py-2 pl-2">{item.unit}</td>
                   <td className="py-2">{formatDelivery(item) || "—"}</td>
                   <td className="py-2 text-right">{Number(item.unitPrice || 0).toLocaleString()}</td>

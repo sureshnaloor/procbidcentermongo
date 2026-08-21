@@ -379,8 +379,20 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
                         <div className="min-w-0">
                           <div className="text-sm font-medium truncate">{v.companyName || "Supplier"}</div>
                           <div className="text-xs text-muted-foreground">{[v.city, v.country].filter(Boolean).join(", ")}</div>
+                          {(v.capabilityGroups ?? []).length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {(v.capabilityGroups ?? []).slice(0, 3).map((g: any) => (
+                                <Badge key={g._id} variant="outline" className="text-[10px]">{g.name}</Badge>
+                              ))}
+                            </div>
+                          )}
                         </div>
-                        <Button size="sm" variant="outline" onClick={() => inviteMutation.mutate(v._id)} disabled={inviteMutation.isPending}>Invite</Button>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <Link href={`/vendors/${v._id}`}>
+                            <Button size="sm" variant="ghost">Profile</Button>
+                          </Link>
+                          <Button size="sm" variant="outline" onClick={() => inviteMutation.mutate(v._id)} disabled={inviteMutation.isPending}>Invite</Button>
+                        </div>
                       </div>
                     ))}
                     {vendors.filter((v: any) => !invitedIds.has(String(v._id))).length === 0 && (
@@ -435,10 +447,15 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
               <p className="text-sm text-muted-foreground py-8 text-center">No offers received yet</p>
             ) : (
               <>
-                <div className="flex justify-end">
+                <div className="flex justify-end gap-2">
                   <Link href={`/bids/comparison/${id}`}>
                     <Button size="sm" variant="outline" className="flex items-center gap-1.5" id="compare-bids-btn">
-                      Compare Offers Side-by-Side
+                      Bid summary
+                    </Button>
+                  </Link>
+                  <Link href={`/comparisons/${id}`}>
+                    <Button size="sm" className="flex items-center gap-1.5" id="comparison-statement-btn">
+                      Comparison statement
                     </Button>
                   </Link>
                 </div>

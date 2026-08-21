@@ -21,6 +21,7 @@ const emptyCompany = {
   registrationNumber: "",
   taxId: "",
   industry: "",
+  designation: "",
   yearEstablished: "",
   employeeCount: "",
   annualTurnover: "",
@@ -64,10 +65,16 @@ function SettingsClient() {
   const { data: documents = [] } = useQuery({
     queryKey: ["documents", "mine"],
     queryFn: () => fetch("/api/documents").then((r) => r.json()),
-    enabled: isCompany,
+    enabled: Boolean(profile),
+  });
+  const { data: groupTypes = [] } = useQuery({
+    queryKey: ["master-groups-with-types"],
+    queryFn: () => fetch("/api/master/groups-with-types").then((r) => r.json()),
+    enabled: profile?.userType === "vendor" || user?.userType === "vendor",
   });
 
   const [form, setForm] = useState(emptyCompany);
+  const [capabilityGroupIds, setCapabilityGroupIds] = useState<string[]>([]);
   const [drafts, setDrafts] = useState<Record<string, { title: string; body: string }>>({});
   const [customDrafts, setCustomDrafts] = useState<Record<string, { title: string; body: string }>>({});
   const [newCustom, setNewCustom] = useState({ title: "", body: "" });
@@ -89,6 +96,7 @@ function SettingsClient() {
       registrationNumber: profile.registrationNumber || "",
       taxId: profile.taxId || "",
       industry: profile.industry || "",
+      designation: profile.designation || "",
       yearEstablished: profile.yearEstablished != null ? String(profile.yearEstablished) : "",
       employeeCount: profile.employeeCount != null ? String(profile.employeeCount) : "",
       annualTurnover: profile.annualTurnover != null ? String(profile.annualTurnover) : "",
@@ -102,6 +110,7 @@ function SettingsClient() {
       address: profile.address || "",
       description: profile.description || "",
     });
+    setCapabilityGroupIds(Array.isArray(profile.capabilityGroupIds) ? profile.capabilityGroupIds.map((id: unknown) => String(id)) : []);
     setDscForm({
       enabled: Boolean(profile.dsc?.enabled),
       holderName: profile.dsc?.holderName || "",
@@ -177,6 +186,7 @@ function SettingsClient() {
         city: form.city,
         address: form.address,
         description: form.description,
+        capabilityGroupIds,
       };
       if (!profile?._id) {
         const res = await fetch("/api/profile", {
@@ -413,6 +423,40 @@ function SettingsClient() {
             <Textarea rows={4} value={form.description} onChange={(e) => setField("description", e.target.value)} id="vendor-description" />
           </div>
         </div>
+        <div className="space-y-3">
+          <div>
+            <Label>Material &amp; service groups</Label>
+            <p className="text-xs text-muted-foreground mt-0.5">Companies see these on your public profile when deciding whether to invite you.</p>
+          </div>
+          {(groupTypes as any[]).length === 0 ? (
+            <p className="text-xs text-muted-foreground">No groups are configured yet. Ask an administrator to add them in Global Masters.</p>
+          ) : (
+            (groupTypes as any[]).map((type: any) => (
+              <div key={type._id} className="space-y-2">
+                <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{type.category === "service" ? "Service groups" : "Material groups"}</div>
+                <div className="flex flex-wrap gap-2">
+                  {(type.groups ?? []).map((g: any) => {
+                    const selected = capabilityGroupIds.includes(String(g._id));
+                    return (
+                      <button
+                        key={g._id}
+                        type="button"
+                        onClick={() => setCapabilityGroupIds((prev) => selected ? prev.filter((id) => id !== String(g._id)) : [...prev, String(g._id)])}
+                        className={`text-xs px-2.5 py-1 rounded-full border transition-all ${
+                          selected
+                            ? "bg-primary border-primary text-primary-foreground"
+                            : "bg-card border-input text-foreground hover:bg-accent"
+                        }`}
+                      >
+                        {g.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
         <Button onClick={() => saveVendorProfile.mutate()} disabled={saveVendorProfile.isPending} id="save-vendor-profile-btn">
           {saveVendorProfile.isPending ? <><Loader2 className="animate-spin h-4 w-4" />Saving...</> : "Save profile"}
         </Button>
@@ -484,7 +528,7 @@ function SettingsClient() {
         <TabsList>
           <TabsTrigger value="account">Account</TabsTrigger>
           <TabsTrigger value="profile">Profile</TabsTrigger>
-          {isCompany && <TabsTrigger value="documents">Documents</TabsTrigger>}
+          {(isCompany || isVendor) && <TabsTrigger value="documents">Documents</TabsTrigger>}
           {isCompany && <TabsTrigger value="terms">Terms</TabsTrigger>}
         </TabsList>
 
@@ -537,6 +581,10 @@ function SettingsClient() {
                 <div className="space-y-1.5">
                   <Label>Industry</Label>
                   <Input value={form.industry} onChange={(e) => setField("industry", e.target.value)} placeholder="e.g. Oil & Gas EPC" id="settings-industry" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Your designation</Label>
+                  <Input value={form.designation} onChange={(e) => setField("designation", e.target.value)} placeholder="e.g. Procurement Manager" id="settings-designation" />
                 </div>
                 <div className="space-y-1.5">
                   <Label>Year established</Label>
@@ -597,12 +645,16 @@ function SettingsClient() {
           )}
         </TabsContent>
 
-        {isCompany && (
+        { (isCompany || isVendor) && (
           <TabsContent value="documents" className="mt-4">
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Public documents</CardTitle>
-              <p className="text-xs text-muted-foreground">Balance sheets, financials, certificates, and similar files are visible to all suppliers. Max 20MB per file.</p>
+              <p className="text-xs text-muted-foreground">
+                {isVendor
+                  ? "Certificates, registrations, and similar files are visible to companies reviewing your profile. Max 20MB per file."
+                  : "Balance sheets, financials, certificates, and similar files are visible to all suppliers. Max 20MB per file."}
+              </p>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex flex-col sm:flex-row gap-3 items-end">

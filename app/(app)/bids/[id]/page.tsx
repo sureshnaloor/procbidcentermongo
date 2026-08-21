@@ -251,6 +251,9 @@ export default function BidDetailPage({ params }: { params: Promise<{ id: string
                     <td className="py-2 align-top">
                       <div>{item.description}</div>
                       {item.notes && <div className="text-xs text-muted-foreground mt-1 whitespace-pre-wrap">Remarks: {item.notes}</div>}
+                      {item.originalQuantity != null && Number(item.quantity) !== Number(item.originalQuantity) && item.quantityChangeReason && (
+                        <div className="text-xs text-amber-700 dark:text-amber-400 mt-1 whitespace-pre-wrap">Qty change: {item.quantityChangeReason}</div>
+                      )}
                       {item.customFields?.length > 0 && (
                         <div className="mt-1 space-y-0.5">
                           {item.customFields.map((field: any, fi: number) => (
@@ -261,7 +264,12 @@ export default function BidDetailPage({ params }: { params: Promise<{ id: string
                         </div>
                       )}
                     </td>
-                    <td className="py-2 text-right align-top">{item.quantity}</td>
+                    <td className="py-2 text-right align-top">
+                      <div>{item.quantity}</div>
+                      {item.originalQuantity != null && Number(item.quantity) !== Number(item.originalQuantity) && (
+                        <div className="text-[11px] text-muted-foreground">Invited: {item.originalQuantity}</div>
+                      )}
+                    </td>
                     <td className="py-2 pl-2 align-top">{item.unit}</td>
                     <td className="py-2 align-top">{formatDelivery(item) || "—"}</td>
                     <td className="py-2 text-right align-top">{Number(item.unitPrice || 0).toLocaleString()}</td>

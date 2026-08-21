@@ -34,7 +34,9 @@ export interface IProfile {
   turnoverYear?: number;
   taxId?: string;
   industry?: string;
+  designation?: string;
   dsc?: IDigitalSignatureCertificate;
+  capabilityGroupIds?: ObjectId[];
   isVerified: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -149,6 +151,19 @@ export interface ITender {
   clauses?: ITenderClause[];
   boqItems?: ITenderBoqItem[];
   documents: ITenderDocument[];
+  comparisonRemarks?: IComparisonRemark[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export const MAX_COMPARISON_REMARKS = 5;
+
+export interface IComparisonRemark {
+  level: number;
+  userId: ObjectId;
+  userName: string;
+  designation: string;
+  remarks: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -167,6 +182,8 @@ export interface IBidLineItem {
   _id?: ObjectId;
   description: string;
   quantity: number;
+  originalQuantity?: number;
+  quantityChangeReason?: string;
   unit: string;
   unitPrice: number;
   totalPrice: number;

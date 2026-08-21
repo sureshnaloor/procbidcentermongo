@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
   const limit = Math.min(parseInt(searchParams.get('limit') ?? '20'), 100);
   const offset = parseInt(searchParams.get('offset') ?? '0');
 
-  const { profiles } = await collections();
+  const { profiles, documents, materialServiceGroups, materialServiceTypes } = await collections();
   const filter: Filter<IProfile> = {};
   if (userType) filter.userType = userType;
   if (search) {
@@ -29,5 +29,45 @@ export async function GET(req: NextRequest) {
     profiles.countDocuments(filter),
   ]);
 
-  return NextResponse.json({ items, total });
+  const vendorItems = items.filter((p) => p.userType === 'vendor');
+  const vendorIds = vendorItems.map((p) => p._id!).filter(Boolean);
+  const allGroupIds = vendorItems.flatMap((p) => p.capabilityGroupIds ?? []);
+
+  const [groups, types, docCounts] = await Promise.all([
+    allGroupIds.length
+      ? materialServiceGroups.find({ _id: { $in: allGroupIds } }).toArray()
+      : Promise.resolve([]),
+    allGroupIds.length
+      ? materialServiceTypes.find({}).toArray()
+      : Promise.resolve([]),
+    vendorIds.length
+      ? documents.aggregate<{ _id: typeof vendorIds[number]; count: number }>([
+          { $match: { profileId: { $in: vendorIds }, visibility: 'public' } },
+          { $group: { _id: '$profileId', count: { $sum: 1 } } },
+        ]).toArray()
+      : Promise.resolve([]),
+  ]);
+
+  const typeById = new Map(types.map((t) => [t._id!.toString(), t]));
+  const groupById = new Map(groups.map((g) => [g._id!.toString(), {
+    _id: g._id,
+    name: g.name,
+    category: typeById.get(g.typeId.toString())?.category ?? 'material',
+  }]));
+  const docsByVendor = new Map(docCounts.map((row) => [row._id.toString(), row.count]));
+
+  const safeItems = items.map((profile) => {
+    const { userId: _userId, ...safe } = profile;
+    if (profile.userType !== 'vendor') return safe;
+    const capabilityGroups = (profile.capabilityGroupIds ?? [])
+      .map((gid) => groupById.get(gid.toString()))
+      .filter(Boolean);
+    return {
+      ...safe,
+      capabilityGroups,
+      publicDocumentCount: docsByVendor.get(profile._id!.toString()) ?? 0,
+    };
+  });
+
+  return NextResponse.json({ items: safeItems, total });
 }

@@ -164,4 +164,11 @@ body {
   .bid-print-document {
     box-shadow: none !important;
   }
+  .comparison-statement {
+    font-size: 10px;
+  }
+  .comparison-set-break {
+    break-before: page;
+    page-break-before: always;
+  }
 }

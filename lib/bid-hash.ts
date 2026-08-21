@@ -38,6 +38,8 @@ export function canonicalBidPayload(bid: Pick<
     lineItems: (bid.lineItems ?? []).map((item) => ({
       description: item.description ?? '',
       quantity: item.quantity ?? 0,
+      originalQuantity: item.originalQuantity ?? null,
+      quantityChangeReason: item.quantityChangeReason ?? '',
       unit: item.unit ?? '',
       unitPrice: item.unitPrice ?? 0,
       totalPrice: item.totalPrice ?? 0,
