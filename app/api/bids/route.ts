@@ -3,33 +3,61 @@ import { ObjectId } from 'mongodb';
 import { z } from 'zod';
 import { collections } from '@/lib/db';
 import { requireAuth, isNextResponse, requireVendorProfile } from '@/lib/auth-helpers';
-import { assertVendorCanOffer } from '@/lib/tender-access';
-
-function isBidDeadlineOpen(deadline?: Date | null): boolean {
-  if (!deadline) return true;
-  return deadline.getTime() >= Date.now();
-}
+import { assertVendorCanOffer, isBidDeadlineOpen } from '@/lib/tender-access';
+import { bidLineItemInput, normalizeStoredLineItem } from '@/lib/bid-line';
 
 export async function GET() {
   const auth = await requireAuth();
   if (isNextResponse(auth)) return auth;
-  const { bids, tenders } = await collections();
+  const { bids, tenders, profiles } = await collections();
+
+  let rows;
   if (auth.user.role === 'admin') {
-    return NextResponse.json(await bids.find({}).sort({ createdAt: -1 }).toArray());
+    rows = await bids.find({}).sort({ createdAt: -1 }).toArray();
+  } else {
+    const profile = await profiles.findOne({ userId: new ObjectId(auth.user.id) });
+    if (!profile) return NextResponse.json([]);
+    if (profile.userType === 'vendor') {
+      rows = await bids.find({ vendorProfileId: profile._id! }).sort({ createdAt: -1 }).toArray();
+    } else if (profile.userType === 'company') {
+      const myTenders = await tenders.find({ companyProfileId: profile._id! }).project({ _id: 1 }).toArray();
+      const ids = myTenders.map((t) => t._id!);
+      if (ids.length === 0) return NextResponse.json([]);
+      rows = await bids.find({ tenderId: { $in: ids }, status: { $ne: 'draft' } }).sort({ createdAt: -1 }).toArray();
+    } else {
+      return NextResponse.json([]);
+    }
   }
-  const { profiles } = await collections();
-  const profile = await profiles.findOne({ userId: new ObjectId(auth.user.id) });
-  if (!profile) return NextResponse.json([]);
-  if (profile.userType === 'vendor') {
-    return NextResponse.json(await bids.find({ vendorProfileId: profile._id! }).sort({ createdAt: -1 }).toArray());
-  }
-  if (profile.userType === 'company') {
-    const myTenders = await tenders.find({ companyProfileId: profile._id! }).project({ _id: 1 }).toArray();
-    const ids = myTenders.map((t) => t._id!);
-    if (ids.length === 0) return NextResponse.json([]);
-    return NextResponse.json(await bids.find({ tenderId: { $in: ids } }).sort({ createdAt: -1 }).toArray());
-  }
-  return NextResponse.json([]);
+
+  const vendorIds = [...new Set(rows.map((b) => b.vendorProfileId.toString()))].map((id) => new ObjectId(id));
+  const tenderIds = [...new Set(rows.map((b) => b.tenderId.toString()))].map((id) => new ObjectId(id));
+  const [vendorDocs, tenderDocs] = await Promise.all([
+    vendorIds.length ? profiles.find({ _id: { $in: vendorIds } }).toArray() : Promise.resolve([]),
+    tenderIds.length ? tenders.find({ _id: { $in: tenderIds } }).toArray() : Promise.resolve([]),
+  ]);
+  const vendorById = new Map(vendorDocs.map((v) => [v._id!.toString(), {
+    _id: v._id,
+    companyName: v.companyName,
+    contactPerson: v.contactPerson,
+    phone: v.phone,
+    city: v.city,
+    country: v.country,
+    registrationNumber: v.registrationNumber,
+  }]));
+  const tenderById = new Map(tenderDocs.map((t) => [t._id!.toString(), {
+    _id: t._id,
+    title: t.title,
+    type: t.type,
+    status: t.status,
+    bidDeadline: t.bidDeadline,
+    currency: t.currency,
+  }]));
+
+  return NextResponse.json(rows.map((b) => ({
+    ...b,
+    vendor: vendorById.get(b.vendorProfileId.toString()) ?? null,
+    tender: tenderById.get(b.tenderId.toString()) ?? null,
+  })));
 }
 
 export async function POST(req: NextRequest) {
@@ -52,15 +80,10 @@ export async function POST(req: NextRequest) {
       slug: z.string().optional(),
       accepted: z.boolean(),
       comments: z.string().optional(),
+      originalBody: z.string().optional(),
+      proposedBody: z.string().optional(),
     })).default([]),
-    lineItems: z.array(z.object({
-      description: z.string(),
-      quantity: z.number(),
-      unit: z.string(),
-      unitPrice: z.number(),
-      deliveryDays: z.number().optional(),
-      notes: z.string().optional(),
-    })).optional(),
+    lineItems: z.array(bidLineItemInput).optional(),
   }).parse(body);
 
   const { tenders, bids, bidHistory } = await collections();
@@ -71,6 +94,14 @@ export async function POST(req: NextRequest) {
 
   const allowed = await assertVendorCanOffer(tender._id!, vendor._id!);
   if (!allowed.ok) return NextResponse.json({ error: allowed.error }, { status: 403 });
+
+  const existing = await bids.findOne({ tenderId: tender._id!, vendorProfileId: vendor._id! });
+  if (existing) {
+    if (existing.status === 'draft') {
+      return NextResponse.json({ error: 'A draft offer already exists', bidId: existing._id }, { status: 409 });
+    }
+    return NextResponse.json({ error: 'You already have an offer on this package' }, { status: 400 });
+  }
 
   const now = new Date();
   const result = await bids.insertOne({
@@ -84,15 +115,7 @@ export async function POST(req: NextRequest) {
     commercialProposal: data.commercialProposal,
     notes: data.notes,
     clauseResponses: data.clauseResponses,
-    lineItems: (data.lineItems ?? []).map((item) => ({
-      description: item.description,
-      quantity: item.quantity,
-      unit: item.unit,
-      unitPrice: item.unitPrice,
-      totalPrice: item.quantity * item.unitPrice,
-      deliveryDays: item.deliveryDays,
-      notes: item.notes,
-    })),
+    lineItems: (data.lineItems ?? []).map((item) => normalizeStoredLineItem(item)),
     createdAt: now,
     updatedAt: now,
   });

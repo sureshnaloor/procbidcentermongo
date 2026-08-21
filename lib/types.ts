@@ -34,9 +34,30 @@ export interface IProfile {
   turnoverYear?: number;
   taxId?: string;
   industry?: string;
+  dsc?: IDigitalSignatureCertificate;
   isVerified: boolean;
   createdAt: Date;
   updatedAt: Date;
+}
+
+export interface IDigitalSignatureCertificate {
+  enabled: boolean;
+  holderName?: string;
+  serialNumber?: string;
+  issuer?: string;
+  validFrom?: Date;
+  validTo?: Date;
+}
+
+export interface IBidSignature {
+  method: 'dsc';
+  signedAt: Date;
+  holderName: string;
+  serialNumber: string;
+  issuer?: string;
+  documentHash: string;
+  signedPdfName?: string;
+  signedPdfUrl?: string;
 }
 
 // ─── Master Data ─────────────────────────────────────────────────────────────
@@ -68,8 +89,16 @@ export interface IMaterialServiceItem {
 // ─── Tender ──────────────────────────────────────────────────────────────────
 export type TenderStatus = 'draft' | 'published' | 'closed' | 'awarded' | 'cancelled';
 export type TenderType = 'rfp' | 'rfq' | 'tender';
-export type TenderDocumentCategory = 'drawing' | 'terms' | 'other';
+export type TenderDocumentCategory = 'boq' | 'scope' | 'drawing' | 'terms' | 'other';
 export type ClauseKind = 'safety' | 'quality' | 'payment' | 'delivery' | 'compliance' | 'scope' | 'legal' | 'custom';
+
+export interface ITenderBoqItem {
+  description: string;
+  quantity: number;
+  unit: string;
+  groupId?: ObjectId;
+  itemId?: ObjectId;
+}
 
 export interface ITenderClause {
   kind: ClauseKind;
@@ -118,6 +147,7 @@ export interface ITender {
   termsConditions?: string;
   groupIds: ObjectId[];
   clauses?: ITenderClause[];
+  boqItems?: ITenderBoqItem[];
   documents: ITenderDocument[];
   createdAt: Date;
   updatedAt: Date;
@@ -125,6 +155,13 @@ export interface ITender {
 
 // ─── Bid ─────────────────────────────────────────────────────────────────────
 export type BidStatus = 'draft' | 'submitted' | 'under_review' | 'shortlisted' | 'accepted' | 'rejected' | 'withdrawn';
+
+export type DeliveryMode = 'days' | 'weeks' | 'working_weeks' | 'date';
+
+export interface IBidCustomField {
+  label: string;
+  value: string;
+}
 
 export interface IBidLineItem {
   _id?: ObjectId;
@@ -134,7 +171,11 @@ export interface IBidLineItem {
   unitPrice: number;
   totalPrice: number;
   deliveryDays?: number;
+  deliveryMode?: DeliveryMode;
+  deliveryValue?: number;
+  deliveryDate?: Date;
   notes?: string;
+  customFields?: IBidCustomField[];
 }
 
 export interface IBid {
@@ -149,6 +190,8 @@ export interface IBid {
   commercialProposal?: string;
   notes?: string;
   submittedAt?: Date;
+  withdrawnAt?: Date;
+  signature?: IBidSignature;
   lineItems: IBidLineItem[];
   clauseResponses?: IBidClauseResponse[];
   createdAt: Date;
@@ -160,6 +203,8 @@ export interface IBidClauseResponse {
   slug?: string;
   accepted: boolean;
   comments?: string;
+  originalBody?: string;
+  proposedBody?: string;
 }
 
 export interface IBidHistory {
@@ -184,8 +229,19 @@ export interface ITenderInvite {
   vendorProfileId: ObjectId;
   status: TenderInviteStatus;
   note?: string;
+  accessToken?: string;
   createdAt: Date;
   updatedAt: Date;
+}
+
+export interface IVendorBlacklist {
+  _id?: ObjectId;
+  companyProfileId: ObjectId;
+  vendorProfileId: ObjectId;
+  reason?: string;
+  relatedTenderId?: ObjectId;
+  relatedBidId?: ObjectId;
+  createdAt: Date;
 }
 
 export interface IVendorQualification {
@@ -219,7 +275,7 @@ export interface IDocument {
 }
 
 // ─── Messages ────────────────────────────────────────────────────────────────
-export type MessageKind = 'dm' | 'channel';
+export type MessageKind = 'dm' | 'channel' | 'offer_thread';
 export type ChannelKind = 'information' | 'announcement' | 'alert' | 'general';
 
 export interface IMessage {

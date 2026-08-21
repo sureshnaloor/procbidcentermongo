@@ -25,7 +25,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ ten
   }
 
   if (profile?.userType === 'company' && profile._id!.toString() === tender.companyProfileId.toString()) {
-    const allBids = await bids.find({ tenderId: tender._id! }).sort({ createdAt: -1 }).toArray();
+    const allBids = await bids.find({ tenderId: tender._id!, status: { $ne: 'draft' } }).sort({ createdAt: -1 }).toArray();
     const withVendors = await Promise.all(allBids.map(async (b) => ({
       ...b, vendor: await profiles.findOne({ _id: b.vendorProfileId }),
     })));

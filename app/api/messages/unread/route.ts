@@ -8,6 +8,10 @@ export async function GET() {
   const profile = await getProfileForUser(auth.user.id);
   if (!profile) return NextResponse.json({ count: 0 });
   const { messages } = await collections();
-  const count = await messages.countDocuments({ kind: 'dm', receiverProfileId: profile._id!, isRead: false });
+  const count = await messages.countDocuments({
+    receiverProfileId: profile._id!,
+    isRead: false,
+    kind: { $in: ['dm', 'offer_thread'] },
+  });
   return NextResponse.json({ count });
 }

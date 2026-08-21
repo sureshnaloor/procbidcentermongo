@@ -1,12 +1,12 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
-import { Loader2, Trash2, FileText, Calendar, Upload, Plus } from "lucide-react";
+import { Loader2, Trash2, FileText, Calendar, Upload, Plus, AlertCircle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,7 +14,27 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { clauseKey, makeCustomSlug } from "@/lib/clauses";
+import {
+  DEFAULT_PROCUREMENT_TYPE,
+  PROCUREMENT_TYPES,
+  TENDER_DOCUMENT_CATEGORIES,
+  defaultDocumentCategory,
+  getPublishBlockers,
+  getPublishDateIssues,
+} from "@/lib/procurement";
+import type { TenderDocumentCategory, TenderType } from "@/lib/types";
+import { PublishConfirmDialog } from "@/components/publish-confirm-dialog";
 
 interface TenderFormProps {
   mode: "create" | "edit";
@@ -22,12 +42,20 @@ interface TenderFormProps {
 }
 
 interface SelectedFile {
-  category: "drawing" | "terms" | "other";
+  category: TenderDocumentCategory;
   fileName: string;
   fileType: string;
   fileBase64: string;
   fileSize: number;
 }
+
+interface BoqLine {
+  description: string;
+  quantity: number;
+  unit: string;
+}
+
+const TYPE_ORDER: TenderType[] = ["rfq", "rfp", "tender"];
 
 export function TenderForm({ mode, tender }: TenderFormProps) {
   const router = useRouter();
@@ -35,11 +63,12 @@ export function TenderForm({ mode, tender }: TenderFormProps) {
   const { data: session } = useSession();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const isAdmin = (session as any)?.user?.role === "admin";
+  const isDraft = mode === "create" || tender?.status === "draft";
 
   const [form, setForm] = useState({
     title: "",
     description: "",
-    type: "tender" as "rfp" | "rfq" | "tender",
+    type: DEFAULT_PROCUREMENT_TYPE as TenderType,
     bidDeadline: "",
     deliveryDeadline: "",
     estimatedValue: "",
@@ -52,7 +81,11 @@ export function TenderForm({ mode, tender }: TenderFormProps) {
 
   const [clauses, setClauses] = useState<{ kind: string; slug?: string; templateId?: string; title: string; body: string; required: boolean; included: boolean }[]>([]);
   const [files, setFiles] = useState<SelectedFile[]>([]);
-  const [fileCategory, setFileCategory] = useState<"drawing" | "terms" | "other">("other");
+  const [fileCategory, setFileCategory] = useState<TenderDocumentCategory>(defaultDocumentCategory(DEFAULT_PROCUREMENT_TYPE));
+  const [boqItems, setBoqItems] = useState<BoqLine[]>([{ description: "", quantity: 1, unit: "unit" }]);
+  const [pendingType, setPendingType] = useState<TenderType | null>(null);
+  const [saveIntent, setSaveIntent] = useState<"draft" | "publish">("draft");
+  const [publishOpen, setPublishOpen] = useState(false);
 
   const { data: groupsWithTypes = [], isLoading: loadingGroups } = useQuery({
     queryKey: ["master", "groups-with-types"],
@@ -75,10 +108,11 @@ export function TenderForm({ mode, tender }: TenderFormProps) {
 
   useEffect(() => {
     if (tender && mode === "edit") {
+      const nextType = (tender.type || DEFAULT_PROCUREMENT_TYPE) as TenderType;
       setForm({
         title: tender.title || "",
         description: tender.description || "",
-        type: tender.type || "tender",
+        type: nextType,
         bidDeadline: tender.bidDeadline ? new Date(tender.bidDeadline).toISOString().split("T")[0] : "",
         deliveryDeadline: tender.deliveryDeadline ? new Date(tender.deliveryDeadline).toISOString().split("T")[0] : "",
         estimatedValue: tender.estimatedValue !== undefined ? String(tender.estimatedValue) : "",
@@ -88,8 +122,16 @@ export function TenderForm({ mode, tender }: TenderFormProps) {
         termsConditions: tender.termsConditions || "",
         groupIds: Array.isArray(tender.groupIds) ? tender.groupIds.map((g: any) => String(g)) : [],
       });
+      setFileCategory(defaultDocumentCategory(nextType));
       if (Array.isArray(tender.clauses) && tender.clauses.length > 0) {
         setClauses(tender.clauses.map((c: any) => ({ ...c, included: true })));
+      }
+      if (Array.isArray(tender.boqItems) && tender.boqItems.length > 0) {
+        setBoqItems(tender.boqItems.map((item: any) => ({
+          description: item.description || "",
+          quantity: Number(item.quantity) || 1,
+          unit: item.unit || "unit",
+        })));
       }
     }
   }, [tender, mode]);
@@ -120,6 +162,20 @@ export function TenderForm({ mode, tender }: TenderFormProps) {
 
   function setField(key: keyof typeof form, value: any) {
     setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function applyType(next: TenderType) {
+    setForm((prev) => ({ ...prev, type: next }));
+    setFileCategory(defaultDocumentCategory(next));
+  }
+
+  function requestTypeChange(next: TenderType) {
+    if (next === form.type) return;
+    if (next === "rfq") {
+      applyType(next);
+      return;
+    }
+    setPendingType(next);
   }
 
   const handleGroupToggle = (groupId: string) => {
@@ -161,7 +217,6 @@ export function TenderForm({ mode, tender }: TenderFormProps) {
       reader.readAsDataURL(file);
     });
 
-    // Reset input
     e.target.value = "";
   };
 
@@ -169,25 +224,33 @@ export function TenderForm({ mode, tender }: TenderFormProps) {
     setFiles((prev) => prev.filter((_, i) => i !== idx));
   };
 
-  const deleteExistingDocMutation = useMutation({
-    mutationFn: async (docId: string) => {
-      // In our current API design, docId is deleted via tender documents route:
-      // DELETE /api/tenders/[id]/documents/[docId] is NOT specifically registered, but we have:
-      // api/tenders/[id]/documents/route.ts or similar. Wait, does DELETE api/tenders/[id]/documents/[docId] exist?
-      // In the API files list:
-      // /Users/sureshmenon/Desktop/procbidcentermongo/app/api/tenders/[id]/documents/route.ts exists
-      // Wait, let's look if a DELETE handler is present in that route. Let's just invalidate query on success.
-      // Let's use a placeholder delete action or just update the entire documents array.
-      // Wait! Let's check app/api/tenders/[id]/documents/route.ts.
-    }
+  const validBoqItems = boqItems.filter((item) => item.description.trim() && Number(item.quantity) > 0);
+  const allDocuments = [
+    ...(tender?.documents ?? []),
+    ...files.map((f) => ({ category: f.category })),
+  ];
+  const publishBlockers = getPublishBlockers({
+    type: form.type,
+    documents: allDocuments,
+    boqItems: validBoqItems,
   });
+  const publishDates = getPublishDateIssues(form.bidDeadline || null, form.deliveryDeadline || null);
+  const allPublishBlockers = [...publishBlockers, ...publishDates.blockers];
+  const typeMeta = PROCUREMENT_TYPES[form.type];
+  const showBoqEditor = form.type === "rfq" || form.type === "tender";
 
   const mutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (intent: "draft" | "publish") => {
       const payload = {
         ...form,
+        status: intent === "publish" || !isDraft ? undefined : "draft",
         estimatedValue: form.estimatedValue ? parseFloat(form.estimatedValue) : undefined,
         clauses: clauses.filter((c) => c.included).map(({ kind, slug, title, body, required }) => ({ kind, slug, title, body, required })),
+        boqItems: validBoqItems.map((item) => ({
+          description: item.description.trim(),
+          quantity: Number(item.quantity),
+          unit: item.unit.trim() || "unit",
+        })),
         documents: files.map(({ category, fileName, fileType, fileBase64 }) => ({
           category,
           fileName,
@@ -195,6 +258,10 @@ export function TenderForm({ mode, tender }: TenderFormProps) {
           fileBase64,
         })),
       };
+
+      if (intent === "publish" && isDraft) {
+        payload.status = "published";
+      }
 
       const url = mode === "create" ? "/api/tenders" : `/api/tenders/${tender._id}`;
       const method = mode === "create" ? "POST" : "PUT";
@@ -211,8 +278,16 @@ export function TenderForm({ mode, tender }: TenderFormProps) {
       }
       return data;
     },
-    onSuccess: (data) => {
-      toast.success(mode === "create" ? "Tender published successfully" : "Tender updated successfully");
+    onSuccess: (data, intent) => {
+      setPublishOpen(false);
+      const publishedNow = intent === "publish" && isDraft;
+      toast.success(
+        publishedNow
+          ? `${typeMeta.label} published successfully`
+          : mode === "create" || isDraft
+            ? "Saved as draft"
+            : "Tender updated successfully"
+      );
       qc.invalidateQueries({ queryKey: ["tenders"] });
       qc.invalidateQueries({ queryKey: ["tender", data._id] });
       router.push(`/tenders/${data._id}`);
@@ -222,29 +297,59 @@ export function TenderForm({ mode, tender }: TenderFormProps) {
     },
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const validateBase = () => {
     if (!form.title.trim()) {
-      toast.error("Tender title is required");
-      return;
+      toast.error("Title is required");
+      return false;
     }
     if (form.groupIds.length === 0) {
       toast.error("Please select at least one material/service group");
-      return;
+      return false;
     }
     if (!hasGroups) {
       toast.error("No material or service groups are available yet");
+      return false;
+    }
+    return true;
+  };
+
+  const handleSaveDraft = () => {
+    if (!validateBase()) return;
+    setSaveIntent("draft");
+    mutation.mutate("draft");
+  };
+
+  const handlePublish = () => {
+    if (!validateBase()) return;
+    if (allPublishBlockers.length > 0) {
+      toast.error(allPublishBlockers[0]);
       return;
     }
-    mutation.mutate();
+    setPublishOpen(true);
   };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isDraft) handleSaveDraft();
+    else {
+      if (!validateBase()) return;
+      setSaveIntent("draft");
+      mutation.mutate("draft");
+    }
+  };
+
+  const requiredCategoryHint = useMemo(() => {
+    if (form.type === "rfq") return "Required to publish: BOQ line items with quantities, or a BOQ file.";
+    if (form.type === "rfp") return "Required to publish: a complete scope document.";
+    return "Required to publish: a compliance / tender terms document.";
+  }, [form.type]);
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6" id="tender-form">
       <Card>
         <CardContent className="pt-6 space-y-4">
           <div className="space-y-1.5">
-            <Label htmlFor="tender-title">Tender Title</Label>
+            <Label htmlFor="tender-title">{typeMeta.label} Title</Label>
             <Input
               id="tender-title"
               value={form.title}
@@ -257,14 +362,17 @@ export function TenderForm({ mode, tender }: TenderFormProps) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label htmlFor="tender-type">Procurement Type</Label>
-              <Select value={form.type} onValueChange={(v: any) => setField("type", v)}>
+              <Select value={form.type} onValueChange={(v) => requestTypeChange(v as TenderType)}>
                 <SelectTrigger id="tender-type">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="tender">Tender</SelectItem>
-                  <SelectItem value="rfp">RFP (Request for Proposal)</SelectItem>
-                  <SelectItem value="rfq">RFQ (Request for Quotation)</SelectItem>
+                  {TYPE_ORDER.map((type) => (
+                    <SelectItem key={type} value={type}>
+                      {PROCUREMENT_TYPES[type].fullLabel}
+                      {type === "rfq" ? " — default" : ""}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -278,6 +386,11 @@ export function TenderForm({ mode, tender }: TenderFormProps) {
                 placeholder="e.g. Texas, USA"
               />
             </div>
+          </div>
+
+          <div className="rounded-lg border border-border bg-accent/40 p-3 text-sm text-foreground">
+            <div className="font-medium">{typeMeta.fullLabel}</div>
+            <p className="text-muted-foreground mt-1">{typeMeta.summary}</p>
           </div>
 
           <div className="space-y-1.5">
@@ -308,6 +421,7 @@ export function TenderForm({ mode, tender }: TenderFormProps) {
                 value={form.bidDeadline}
                 onChange={(e) => setField("bidDeadline", e.target.value)}
               />
+              <p className="text-[11px] text-muted-foreground">Required to publish. Must be a future date.</p>
             </div>
 
             <div className="space-y-1.5">
@@ -321,6 +435,7 @@ export function TenderForm({ mode, tender }: TenderFormProps) {
                 value={form.deliveryDeadline}
                 onChange={(e) => setField("deliveryDeadline", e.target.value)}
               />
+              <p className="text-[11px] text-muted-foreground">Required to publish. Must be in the future and on or after the bid deadline.</p>
             </div>
           </div>
 
@@ -353,7 +468,7 @@ export function TenderForm({ mode, tender }: TenderFormProps) {
         <CardContent className="pt-6 space-y-4">
           <div>
             <h3 className="font-semibold text-sm text-foreground dark:text-muted-foreground">Material & Service Groups</h3>
-            <p className="text-xs text-muted-foreground mt-0.5">Select at least one group relevant to this tender</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Select at least one group relevant to this package</p>
           </div>
 
           {loadingGroups ? (
@@ -427,7 +542,77 @@ export function TenderForm({ mode, tender }: TenderFormProps) {
         </CardContent>
       </Card>
 
-      {/* Standard terms templates */}
+      {showBoqEditor && (
+        <Card>
+          <CardContent className="pt-6 space-y-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="font-semibold text-sm text-foreground dark:text-muted-foreground">
+                  Bill of Quantities
+                  {form.type === "rfq" ? <span className="text-destructive ml-1">*</span> : null}
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {form.type === "rfq"
+                    ? "Add materials or services with quantities. An RFQ cannot be published until a BOQ is attached."
+                    : "Optional for tenders. Use this for defined material and service quantities in the package."}
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="shrink-0"
+                onClick={() => setBoqItems((prev) => [...prev, { description: "", quantity: 1, unit: "unit" }])}
+              >
+                <Plus className="h-4 w-4" /> Add line
+              </Button>
+            </div>
+            <div className="space-y-2">
+              <div className="hidden sm:grid grid-cols-12 gap-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground px-1">
+                <div className="col-span-7">Description</div>
+                <div className="col-span-2">Qty</div>
+                <div className="col-span-2">Unit</div>
+                <div className="col-span-1" />
+              </div>
+              {boqItems.map((line, i) => (
+                <div key={i} className="grid grid-cols-12 gap-2 items-center">
+                  <Input
+                    className="col-span-12 sm:col-span-7"
+                    placeholder="Material or service description"
+                    value={line.description}
+                    onChange={(e) => setBoqItems((prev) => prev.map((item, idx) => idx === i ? { ...item, description: e.target.value } : item))}
+                  />
+                  <Input
+                    className="col-span-5 sm:col-span-2"
+                    type="number"
+                    min={0}
+                    step="any"
+                    value={line.quantity}
+                    onChange={(e) => setBoqItems((prev) => prev.map((item, idx) => idx === i ? { ...item, quantity: Number(e.target.value) } : item))}
+                  />
+                  <Input
+                    className="col-span-5 sm:col-span-2"
+                    placeholder="unit"
+                    value={line.unit}
+                    onChange={(e) => setBoqItems((prev) => prev.map((item, idx) => idx === i ? { ...item, unit: e.target.value } : item))}
+                  />
+                  <div className="col-span-2 sm:col-span-1">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setBoqItems((prev) => prev.length === 1 ? [{ description: "", quantity: 1, unit: "unit" }] : prev.filter((_, idx) => idx !== i))}
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive/70" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardContent className="pt-6 space-y-4">
           <div className="flex items-start justify-between gap-3">
@@ -552,12 +737,11 @@ export function TenderForm({ mode, tender }: TenderFormProps) {
         </CardContent>
       </Card>
 
-      {/* Attachments */}
       <Card>
         <CardContent className="pt-6 space-y-4">
           <div>
             <h3 className="font-semibold text-sm text-foreground dark:text-muted-foreground">Attachments</h3>
-            <p className="text-xs text-muted-foreground mt-0.5">Upload drawing, specifications, or terms documents (Max 20MB per file)</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{requiredCategoryHint} Max 20MB per file.</p>
           </div>
 
           {tender?.documents?.length > 0 && (
@@ -578,14 +762,17 @@ export function TenderForm({ mode, tender }: TenderFormProps) {
           <div className="flex flex-col sm:flex-row gap-3 items-end">
             <div className="space-y-1.5 flex-1 w-full">
               <Label>Document Category</Label>
-              <Select value={fileCategory} onValueChange={(v: any) => setFileCategory(v)}>
+              <Select value={fileCategory} onValueChange={(v) => setFileCategory(v as TenderDocumentCategory)}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="drawing">Drawing / Specification</SelectItem>
-                  <SelectItem value="terms">Terms & Conditions</SelectItem>
-                  <SelectItem value="other">Other Attachment</SelectItem>
+                  {TENDER_DOCUMENT_CATEGORIES.map((cat) => (
+                    <SelectItem key={cat.value} value={cat.value}>
+                      {cat.label}
+                      {cat.value === defaultDocumentCategory(form.type) ? " — required" : ""}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -632,21 +819,103 @@ export function TenderForm({ mode, tender }: TenderFormProps) {
         </CardContent>
       </Card>
 
+      {isDraft && allPublishBlockers.length > 0 && (
+        <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-foreground">
+          <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+          <div>
+            <div className="font-medium">Not ready to publish</div>
+            <p className="text-muted-foreground mt-0.5">{allPublishBlockers[0]} You can still save a draft.</p>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-end gap-3 pt-4">
         <Button type="button" variant="outline" onClick={() => router.back()}>Cancel</Button>
-        <Button type="submit" disabled={mutation.isPending || !hasGroups} id="submit-tender-form-btn">
-          {mutation.isPending ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Publishing...
-            </>
-          ) : mode === "create" ? (
-            "Publish Tender"
-          ) : (
-            "Save Changes"
-          )}
-        </Button>
+        {isDraft ? (
+          <>
+            <Button type="submit" variant="outline" disabled={mutation.isPending || !hasGroups} id="save-draft-tender-btn">
+              {mutation.isPending && saveIntent === "draft" ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                "Save as Draft"
+              )}
+            </Button>
+            <Button type="button" onClick={handlePublish} disabled={mutation.isPending || !hasGroups || allPublishBlockers.length > 0} id="submit-tender-form-btn">
+              {mutation.isPending && saveIntent === "publish" ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Publishing...
+                </>
+              ) : (
+                `Publish ${typeMeta.label}`
+              )}
+            </Button>
+          </>
+        ) : (
+          <Button type="submit" disabled={mutation.isPending || !hasGroups} id="submit-tender-form-btn">
+            {mutation.isPending ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              "Save Changes"
+            )}
+          </Button>
+        )}
       </div>
+
+      <AlertDialog open={pendingType !== null} onOpenChange={(open) => { if (!open) setPendingType(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Choose the right procurement type</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3 text-left">
+                <p>RFQ is the default. Switch only if the package is not a well-defined quotation request.</p>
+                {TYPE_ORDER.map((type) => {
+                  const meta = PROCUREMENT_TYPES[type];
+                  const selected = pendingType === type;
+                  return (
+                    <div
+                      key={type}
+                      className={`rounded-lg border p-3 ${selected ? "border-primary bg-primary/5" : "border-border"}`}
+                    >
+                      <div className="font-medium text-foreground">{meta.fullLabel}{type === "rfq" ? " — default" : ""}</div>
+                      <p className="text-muted-foreground mt-1">{meta.summary}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{form.type === "rfq" ? "Stay with RFQ" : "Cancel"}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (pendingType) applyType(pendingType);
+                setPendingType(null);
+              }}
+            >
+              Use {pendingType ? PROCUREMENT_TYPES[pendingType].label : "this type"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <PublishConfirmDialog
+        open={publishOpen}
+        typeLabel={typeMeta.label}
+        warnings={publishDates.warnings}
+        pending={mutation.isPending && saveIntent === "publish"}
+        onOpenChange={setPublishOpen}
+        onProceed={() => {
+          setSaveIntent("publish");
+          mutation.mutate("publish");
+        }}
+      />
     </form>
   );
 }

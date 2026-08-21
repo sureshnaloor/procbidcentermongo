@@ -36,7 +36,7 @@ export default function BidComparisonPage({ params }: { params: Promise<{ tender
     return <div className="text-center py-16 text-muted-foreground">Tender not found</div>;
   }
 
-  const submittedBids = bids.filter((b) => ["submitted", "under_review", "shortlisted", "accepted"].includes(b.status));
+  const submittedBids = bids.filter((b) => ["submitted", "under_review", "shortlisted", "accepted", "withdrawn"].includes(b.status));
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
@@ -134,6 +134,9 @@ export default function BidComparisonPage({ params }: { params: Promise<{ tender
                       View Full Details
                     </Link>
                   </div>
+                  {(bid.clauseResponses ?? []).some((r: any) => r.accepted && r.proposedBody && r.proposedBody.trim() !== (r.originalBody ?? "").trim()) && (
+                    <div className="text-xs font-medium text-red-600 dark:text-red-400">Accepted some terms with conditions</div>
+                  )}
                 </CardContent>
               </Card>
             ))}

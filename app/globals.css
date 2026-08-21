@@ -155,3 +155,13 @@ body {
   background-size: 200% 200%;
   animation: gradient-shift 12s ease infinite;
 }
+
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+  }
+  .bid-print-document {
+    box-shadow: none !important;
+  }
+}

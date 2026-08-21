@@ -3,6 +3,8 @@ import { ObjectId } from 'mongodb';
 import { collections } from '@/lib/db';
 import { requireAuth, isNextResponse, requireCompanyProfile } from '@/lib/auth-helpers';
 import { saveTenderDocumentFile } from '@/lib/tender-files';
+import { DOCUMENT_CATEGORY_VALUES } from '@/lib/procurement';
+import type { TenderDocumentCategory } from '@/lib/types';
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -29,9 +31,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   const body = await req.json();
+  const category = (DOCUMENT_CATEGORY_VALUES as readonly string[]).includes(body.category)
+    ? (body.category as TenderDocumentCategory)
+    : 'other';
   const stored = await saveTenderDocumentFile(body.fileName, body.fileBase64);
   const doc = {
-    category: body.category as 'drawing' | 'terms' | 'other',
+    category,
     name: body.fileName,
     fileUrl: stored.fileUrl,
     storedName: stored.storedName,

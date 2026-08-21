@@ -5,6 +5,7 @@ import { collections } from '@/lib/db';
 import { requireAuth, isNextResponse, getProfileForUser, requireCompanyProfile, requireVendorProfile } from '@/lib/auth-helpers';
 import { notify } from '@/lib/notify';
 import { isOfferAuthorized } from '@/lib/tender-access';
+import { createOfferAccessToken, ensureInviteAccessToken, isVendorBlacklisted } from '@/lib/offer-link';
 import type { ITenderInvite, TenderInviteStatus } from '@/lib/types';
 
 async function loadTender(id: string) {
@@ -30,16 +31,23 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     const vendorIds = invites.map((i) => i.vendorProfileId);
     const vendors = vendorIds.length ? await profiles.find({ _id: { $in: vendorIds } }).toArray() : [];
     const byId = new Map(vendors.map((v) => [v._id!.toString(), v]));
-    return NextResponse.json(invites.map((i) => ({
-      ...i,
-      vendor: byId.get(i.vendorProfileId.toString()) ?? null,
-      canOffer: isOfferAuthorized(i.status),
+    return NextResponse.json(await Promise.all(invites.map(async (i) => {
+      const token = isOfferAuthorized(i.status) ? await ensureInviteAccessToken(i) : i.accessToken;
+      return {
+        ...i,
+        vendor: byId.get(i.vendorProfileId.toString()) ?? null,
+        canOffer: isOfferAuthorized(i.status),
+        offerPath: token ? `/offer/${token}` : null,
+      };
     })));
   }
 
   if (profile?.userType === 'vendor') {
     const mine = await tenderInvites.find({ tenderId: tender._id!, vendorProfileId: profile._id! }).toArray();
-    return NextResponse.json(mine.map((i) => ({ ...i, canOffer: isOfferAuthorized(i.status) })));
+    return NextResponse.json(await Promise.all(mine.map(async (i) => {
+      const token = isOfferAuthorized(i.status) ? await ensureInviteAccessToken(i) : null;
+      return { ...i, canOffer: isOfferAuthorized(i.status), offerPath: token ? `/offer/${token}` : null };
+    })));
   }
 
   return NextResponse.json([]);
@@ -76,14 +84,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
     const vendor = await profiles.findOne({ _id: new ObjectId(data.vendorProfileId), userType: 'vendor' });
     if (!vendor) return NextResponse.json({ error: 'Supplier not found' }, { status: 404 });
+    if (await isVendorBlacklisted(company._id!, vendor._id!)) {
+      return NextResponse.json({ error: 'This supplier is blacklisted and cannot be invited' }, { status: 400 });
+    }
 
     const existing = await tenderInvites.findOne({ tenderId: tender._id!, vendorProfileId: vendor._id! });
     let invite: ITenderInvite | null;
     if (existing) {
       const nextStatus: TenderInviteStatus = existing.status === 'requested' ? 'accepted' : 'invited';
+      const token = existing.accessToken || createOfferAccessToken();
       await tenderInvites.updateOne(
         { _id: existing._id },
-        { $set: { status: nextStatus, note: data.note, updatedAt: now } }
+        { $set: { status: nextStatus, note: data.note, accessToken: token, updatedAt: now } }
       );
       invite = await tenderInvites.findOne({ _id: existing._id });
     } else {
@@ -93,6 +105,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         vendorProfileId: vendor._id!,
         status: 'invited',
         note: data.note,
+        accessToken: createOfferAccessToken(),
         createdAt: now,
         updatedAt: now,
       });
@@ -112,6 +125,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const vendor = await requireVendorProfile(auth);
   if (isNextResponse(vendor)) return vendor;
+  if (await isVendorBlacklisted(tender.companyProfileId, vendor._id!)) {
+    return NextResponse.json({ error: 'You cannot request to offer on this package' }, { status: 403 });
+  }
 
   const existing = await tenderInvites.findOne({ tenderId: tender._id!, vendorProfileId: vendor._id! });
   if (existing) {

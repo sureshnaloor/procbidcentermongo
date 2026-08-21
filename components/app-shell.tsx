@@ -106,7 +106,7 @@ export default function AppShell({ session, children }: AppShellProps) {
   return (
     <div className="min-h-screen flex bg-background text-foreground">
       {/* Desktop Sidebar */}
-      <aside className="hidden md:flex flex-col w-64 border-r border-border bg-card">
+      <aside className="hidden md:flex flex-col w-64 border-r border-border bg-card print:hidden">
         {/* Brand */}
         <div className="h-16 flex items-center gap-2.5 px-6 border-b border-border">
           <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center">
@@ -163,11 +163,11 @@ export default function AppShell({ session, children }: AppShellProps) {
       </aside>
 
       {/* Mobile drawer backdrop */}
-      {mobileOpen && <div className="fixed inset-0 z-40 bg-black/50 md:hidden" onClick={() => setMobileOpen(false)} />}
+      {mobileOpen && <div className="fixed inset-0 z-40 bg-black/50 md:hidden print:hidden" onClick={() => setMobileOpen(false)} />}
 
       {/* Mobile Sidebar */}
       <aside
-        className={`fixed top-0 bottom-0 left-0 z-50 w-64 bg-card border-r border-border flex flex-col transition-transform duration-200 ease-in-out md:hidden ${
+        className={`fixed top-0 bottom-0 left-0 z-50 w-64 bg-card border-r border-border flex flex-col transition-transform duration-200 ease-in-out md:hidden print:hidden ${
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
@@ -241,7 +241,7 @@ export default function AppShell({ session, children }: AppShellProps) {
       {/* Main content area */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Header */}
-        <header className="h-16 flex items-center justify-between px-6 border-b border-border bg-card z-10">
+        <header className="h-16 flex items-center justify-between px-6 border-b border-border bg-card z-10 print:hidden">
           <div className="flex items-center gap-4">
             <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setMobileOpen(true)}>
               <Menu className="h-5 w-5" />
@@ -275,7 +275,7 @@ export default function AppShell({ session, children }: AppShellProps) {
         </header>
 
         {/* Page children container */}
-        <main className="flex-1 p-6 overflow-y-auto max-w-7xl w-full mx-auto">{children}</main>
+        <main className="flex-1 p-6 overflow-y-auto max-w-7xl w-full mx-auto print:p-0 print:max-w-none print:overflow-visible">{children}</main>
       </div>
     </div>
   );

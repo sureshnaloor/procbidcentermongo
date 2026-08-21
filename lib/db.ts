@@ -2,7 +2,7 @@ import { getDb } from './mongodb';
 import type {
   IUser, IProfile, IMaterialServiceType, IMaterialServiceGroup, IMaterialServiceItem,
   ITender, IBid, IBidHistory, IVendorQualification, IDocument, IMessage,
-  IMessageChannel, INotification, IContactSubmission, IClauseTemplate, ITenderInvite
+  IMessageChannel, INotification, IContactSubmission, IClauseTemplate, ITenderInvite, IVendorBlacklist
 } from './types';
 
 export async function collections() {
@@ -18,6 +18,7 @@ export async function collections() {
     bidHistory: db.collection<IBidHistory>('bidHistory'),
     vendorQualifications: db.collection<IVendorQualification>('vendorQualifications'),
     tenderInvites: db.collection<ITenderInvite>('tenderInvites'),
+    vendorBlacklist: db.collection<IVendorBlacklist>('vendorBlacklist'),
     clauseTemplates: db.collection<IClauseTemplate>('clauseTemplates'),
     documents: db.collection<IDocument>('documents'),
     messages: db.collection<IMessage>('messages'),
@@ -55,6 +56,9 @@ export async function ensureIndexes() {
   await cols.vendorQualifications.createIndex({ profileId: 1, groupId: 1 }, { unique: true });
   await cols.tenderInvites.createIndex({ tenderId: 1, vendorProfileId: 1 }, { unique: true });
   await cols.tenderInvites.createIndex({ vendorProfileId: 1, status: 1 });
+  await cols.tenderInvites.createIndex({ accessToken: 1 }, { unique: true, sparse: true });
+  await cols.vendorBlacklist.createIndex({ companyProfileId: 1, vendorProfileId: 1 }, { unique: true });
+  await cols.vendorBlacklist.createIndex({ vendorProfileId: 1 });
   await cols.clauseTemplates.createIndex({ kind: 1, isSystem: 1 }, { unique: true, partialFilterExpression: { isSystem: true } });
   try {
     await cols.clauseTemplates.dropIndex('companyProfileId_1_kind_1');
@@ -87,6 +91,7 @@ export async function ensureIndexes() {
   await cols.messages.createIndex({ channelId: 1 });
   await cols.messages.createIndex({ kind: 1 });
   await cols.messages.createIndex({ createdAt: -1 });
+  await cols.messages.createIndex({ tenderId: 1, kind: 1 });
   // Message channels
   await cols.messageChannels.createIndex({ slug: 1 }, { unique: true });
   // Notifications

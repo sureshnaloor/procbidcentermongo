@@ -1,6 +1,6 @@
 "use client";
 
-import { use } from "react";
+import { use, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
@@ -9,10 +9,12 @@ import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Edit, Trash2, FileText, CalendarClock, MapPin, DollarSign, Users, Loader2, ExternalLink, Plus, MessageSquare } from "lucide-react";
-import { formatDistanceToNow, format } from "date-fns";
+import { Edit, Trash2, FileText, CalendarClock, MapPin, DollarSign, Users, Loader2, ExternalLink, Plus, AlertCircle, Copy, Pencil } from "lucide-react";
+import { format } from "date-fns";
+import { documentCategoryLabel, getPublishDateIssues, PROCUREMENT_TYPES } from "@/lib/procurement";
+import { OfferThreadPanel, type ThreadVendorOption } from "@/components/offer-thread-panel";
+import { PublishConfirmDialog } from "@/components/publish-confirm-dialog";
 
 const STATUS_COLORS: Record<string, "default" | "secondary" | "destructive" | "outline" | "success" | "warning"> = {
   draft: "secondary", published: "success", closed: "outline", awarded: "default", cancelled: "destructive",
@@ -25,6 +27,8 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
   const user = (session as any)?.user;
   const router = useRouter();
   const qc = useQueryClient();
+  const [publishOpen, setPublishOpen] = useState(false);
+  const [threadVendorId, setThreadVendorId] = useState<string>("");
 
   const { data: tender, isLoading } = useQuery({ queryKey: ["tender", id], queryFn: () => fetch(`/api/tenders/${id}`).then((r) => r.json()) });
   const { data: profile } = useQuery({ queryKey: ["profile", "me"], queryFn: () => fetch("/api/profile").then((r) => r.json()), enabled: !!session });
@@ -51,8 +55,19 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
   });
 
   const updateStatusMutation = useMutation({
-    mutationFn: (status: string) => fetch(`/api/tenders/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }) }).then((r) => r.json()),
-    onSuccess: () => { toast.success("Status updated"); qc.invalidateQueries({ queryKey: ["tender", id] }); },
+    mutationFn: async (status: string) => {
+      const res = await fetch(`/api/tenders/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }) });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to update status");
+      return data;
+    },
+    onSuccess: (_data, status) => {
+      setPublishOpen(false);
+      toast.success(status === "published" ? "Package published" : "Status updated");
+      qc.invalidateQueries({ queryKey: ["tender", id] });
+      qc.invalidateQueries({ queryKey: ["tenders"] });
+    },
+    onError: (err: Error) => toast.error(err.message),
   });
 
   const inviteMutation = useMutation({
@@ -113,14 +128,40 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
   const canPrepareOffer = isVendor && !biddingClosed && participation.canPrepareOffer;
   const vendors = vendorsData?.items ?? [];
   const invitedIds = new Set((invites as any[]).map((i: any) => String(i.vendorProfileId)));
+  const typeLabel = PROCUREMENT_TYPES[tender.type as keyof typeof PROCUREMENT_TYPES]?.label ?? "package";
+  const publishDates = getPublishDateIssues(tender.bidDeadline, tender.deliveryDeadline);
+
+  const threadVendors: ThreadVendorOption[] = (() => {
+    const map = new Map<string, string>();
+    for (const invite of invites as any[]) {
+      const vid = String(invite.vendorProfileId);
+      map.set(vid, invite.vendor?.companyName || "Supplier");
+    }
+    for (const bidRow of bids as any[]) {
+      const vid = String(bidRow.vendorProfileId);
+      if (!map.has(vid)) map.set(vid, bidRow.vendor?.companyName || "Supplier");
+    }
+    return [...map.entries()].map(([optId, name]) => ({ id: optId, name }));
+  })();
+
+  const vendorCanMessage = isVendor && Boolean(tender.participation?.status || tender.myBid?._id);
+  const companyCanMessage = isOwner && threadVendors.length > 0;
+  const showThread = vendorCanMessage || companyCanMessage;
+  const selectedThreadVendor = isVendor
+    ? String(profile?._id || "")
+    : (threadVendorId || threadVendors[0]?.id || "");
+  const threadCounterpart = isVendor
+    ? (tender.company?.companyName || "Company")
+    : (threadVendors.find((v) => v.id === selectedThreadVendor)?.name || "Supplier");
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="max-w-6xl mx-auto flex flex-col lg:flex-row gap-6 items-start">
+    <div className="flex-1 min-w-0 max-w-4xl mx-auto lg:mx-0 space-y-6">
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-2">
-            <Badge variant="outline" className="text-xs uppercase">{tender.type}</Badge>
+            <Badge variant="outline" className="text-xs uppercase">{PROCUREMENT_TYPES[tender.type as keyof typeof PROCUREMENT_TYPES]?.label ?? tender.type}</Badge>
             <Badge variant={STATUS_COLORS[tender.status] ?? "outline"}>{tender.status}</Badge>
             {biddingClosed && <Badge variant="warning">Bidding Closed</Badge>}
           </div>
@@ -130,17 +171,12 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
               <Link href={`/companies/${tender.company._id ?? tender.companyProfileId}`} className="text-sm text-primary hover:underline">
                 {tender.company.companyName}
               </Link>
-              {isVendor && (
-                <Link href={`/messages/dm/${tender.company._id ?? tender.companyProfileId}`}>
-                  <Button variant="outline" size="sm" className="h-7 text-xs"><MessageSquare className="h-3 w-3" /> Message</Button>
-                </Link>
-              )}
             </div>
           )}
         </div>
         {(isOwner || isAdmin) && (
           <div className="flex items-center gap-2 shrink-0">
-            {isOwner && tender.canEdit && (
+            {isOwner && tender.status === "draft" && (
               <Link href={`/tenders/${id}/edit`}>
                 <Button variant="outline" size="sm" id="edit-tender-btn"><Edit className="h-4 w-4" /></Button>
               </Link>
@@ -163,9 +199,23 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
       </div>
 
       {/* Actions */}
+      {isVendor && biddingClosed && tender.myBid?._id && (
+        <Link href={`/bids/${tender.myBid._id}`}>
+          <Button variant="outline" size="sm">View Offer</Button>
+        </Link>
+      )}
+
       {isVendor && !biddingClosed && (
         <div className="flex flex-wrap gap-3 items-center">
-          {canPrepareOffer ? (
+          {tender.myBid?.status === "draft" ? (
+            <Link href={`/bids/${tender.myBid._id}/edit`}>
+              <Button id="modify-offer-btn"><Pencil /> Modify Offer</Button>
+            </Link>
+          ) : tender.myBid?._id ? (
+            <Link href={`/bids/${tender.myBid._id}`}>
+              <Button variant="outline" id="view-offer-btn">View Offer</Button>
+            </Link>
+          ) : canPrepareOffer ? (
             <Link href={`/bids/new/${id}`}>
               <Button id="submit-bid-btn"><Plus /> Prepare Offer</Button>
             </Link>
@@ -185,6 +235,37 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
         </div>
       )}
 
+      {isOwner && tender.status === "draft" && (
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 space-y-3">
+          <div className="flex items-start gap-2">
+            <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+            <div className="text-sm">
+              <div className="font-medium text-foreground">This {PROCUREMENT_TYPES[tender.type as keyof typeof PROCUREMENT_TYPES]?.label ?? "package"} is a draft</div>
+              <p className="text-muted-foreground mt-0.5">
+                Suppliers cannot see it until you publish.
+                {(tender.publishBlockers as string[] | undefined)?.length
+                  ? ` ${((tender.publishBlockers as string[])[0])}`
+                  : " It is ready to publish."}
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              id="publish-tender-btn"
+              onClick={() => setPublishOpen(true)}
+              disabled={updateStatusMutation.isPending || tender.canPublish === false}
+            >
+              {updateStatusMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              Publish
+            </Button>
+            <Link href={`/tenders/${id}/edit`}>
+              <Button size="sm" variant="outline">Complete package</Button>
+            </Link>
+          </div>
+        </div>
+      )}
+
       {isOwner && tender.status === "published" && (
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={() => updateStatusMutation.mutate("closed")} id="close-tender-btn">Close Tender</Button>
@@ -197,13 +278,17 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
       <Tabs defaultValue="details">
         <TabsList>
           <TabsTrigger value="details">Details</TabsTrigger>
+          {tender.boqItems?.length > 0 && <TabsTrigger value="boq">BOQ ({tender.boqItems.length})</TabsTrigger>}
           {tender.clauses?.length > 0 && <TabsTrigger value="terms">Terms ({tender.clauses.length})</TabsTrigger>}
           {tender.documents?.length > 0 && <TabsTrigger value="documents">Documents ({tender.documents.length})</TabsTrigger>}
-          {(isOwner || isAdmin) && <TabsTrigger value="suppliers">Suppliers ({(invites as any[]).length})</TabsTrigger>}
+          {(isOwner || isAdmin) && tender.status !== "draft" && <TabsTrigger value="suppliers">Suppliers ({(invites as any[]).length})</TabsTrigger>}
           {(isOwner || isAdmin) && <TabsTrigger value="bids">Offers ({bids.length})</TabsTrigger>}
         </TabsList>
 
         <TabsContent value="details" className="space-y-4 mt-4">
+          {PROCUREMENT_TYPES[tender.type as keyof typeof PROCUREMENT_TYPES] && (
+            <p className="text-sm text-muted-foreground">{PROCUREMENT_TYPES[tender.type as keyof typeof PROCUREMENT_TYPES].summary}</p>
+          )}
           {tender.description && (
             <Card><CardContent className="pt-6"><p className="text-sm text-foreground dark:text-muted-foreground whitespace-pre-wrap">{tender.description}</p></CardContent></Card>
           )}
@@ -221,6 +306,30 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
             <Card><CardHeader><CardTitle className="text-sm">Requirements</CardTitle></CardHeader><CardContent className="pt-0"><p className="text-sm text-foreground dark:text-muted-foreground whitespace-pre-wrap">{tender.requirements}</p></CardContent></Card>
           )}
         </TabsContent>
+
+        {tender.boqItems?.length > 0 && (
+          <TabsContent value="boq" className="mt-4">
+            <Card>
+              <CardHeader><CardTitle className="text-sm">Bill of Quantities</CardTitle></CardHeader>
+              <CardContent className="pt-0">
+                <div className="grid grid-cols-12 gap-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                  <div className="col-span-7">Description</div>
+                  <div className="col-span-2">Qty</div>
+                  <div className="col-span-3">Unit</div>
+                </div>
+                <div className="space-y-2">
+                  {tender.boqItems.map((item: any, i: number) => (
+                    <div key={i} className="grid grid-cols-12 gap-2 text-sm border-b border-border pb-2 last:border-0">
+                      <div className="col-span-7 text-foreground">{item.description}</div>
+                      <div className="col-span-2">{item.quantity}</div>
+                      <div className="col-span-3 text-muted-foreground">{item.unit}</div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
 
         {tender.clauses?.length > 0 && (
           <TabsContent value="terms" className="space-y-4 mt-4">
@@ -248,7 +357,7 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
                   <FileText className="h-4 w-4 text-primary shrink-0" />
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium text-foreground truncate">{d.name}</div>
-                    <div className="text-xs text-muted-foreground">{d.category} · {d.fileType}</div>
+                    <div className="text-xs text-muted-foreground">{documentCategoryLabel(d.category)} · {d.fileType}</div>
                   </div>
                   <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
                 </a>
@@ -257,7 +366,7 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
           </TabsContent>
         )}
 
-        {(isOwner || isAdmin) && (
+        {(isOwner || isAdmin) && tender.status !== "draft" && (
           <TabsContent value="suppliers" className="mt-4 space-y-4">
             {!biddingClosed && (
               <Card>
@@ -291,6 +400,19 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
                     <div className="text-xs text-muted-foreground capitalize">{inv.status}</div>
                   </div>
                   <div className="flex items-center gap-2">
+                    {inv.offerPath && (inv.status === "invited" || inv.status === "accepted") && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={async () => {
+                          const url = `${window.location.origin}${inv.offerPath}`;
+                          await navigator.clipboard.writeText(url);
+                          toast.success("Vendor link copied");
+                        }}
+                      >
+                        <Copy className="h-3.5 w-3.5" /> Copy link
+                      </Button>
+                    )}
                     {inv.status === "requested" && (
                       <>
                         <Button size="sm" onClick={() => updateInviteMutation.mutate({ inviteId: inv._id, status: "accepted" })}>Accept</Button>
@@ -342,6 +464,26 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
           </TabsContent>
         )}
       </Tabs>
+
+      <PublishConfirmDialog
+        open={publishOpen}
+        typeLabel={typeLabel}
+        warnings={publishDates.warnings}
+        pending={updateStatusMutation.isPending}
+        onOpenChange={setPublishOpen}
+        onProceed={() => updateStatusMutation.mutate("published")}
+      />
+    </div>
+    {showThread && (
+      <OfferThreadPanel
+        tenderId={id}
+        vendorProfileId={selectedThreadVendor}
+        bidId={tender.myBid?._id ? String(tender.myBid._id) : undefined}
+        counterpartName={threadCounterpart}
+        vendorOptions={isOwner ? threadVendors : undefined}
+        onVendorChange={setThreadVendorId}
+      />
+    )}
     </div>
   );
 }

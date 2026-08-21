@@ -11,7 +11,7 @@ export async function GET() {
 
   const { messages, profiles } = await collections();
   const allMessages = await messages.find({
-    kind: 'dm',
+    kind: { $in: ['dm', 'offer_thread'] },
     $or: [
       { senderProfileId: profile._id! },
       { receiverProfileId: profile._id! },
@@ -31,7 +31,7 @@ export async function GET() {
   for (const [partnerId, lastMsg] of conversationMap) {
     const partner = await profiles.findOne({ _id: new ObjectId(partnerId) });
     const unreadCount = await messages.countDocuments({
-      kind: 'dm',
+      kind: { $in: ['dm', 'offer_thread'] },
       senderProfileId: new ObjectId(partnerId),
       receiverProfileId: profile._id!,
       isRead: false,

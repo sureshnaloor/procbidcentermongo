@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { collections } from '@/lib/db';
 import { requireAuth, isNextResponse, getProfileForUser, requireCompanyProfile } from '@/lib/auth-helpers';
 import { notify } from '@/lib/notify';
+import { createOfferAccessToken } from '@/lib/offer-link';
 import type { TenderInviteStatus } from '@/lib/types';
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string; inviteId: string }> }) {
@@ -48,7 +49,11 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     }
   }
 
-  await tenderInvites.updateOne({ _id: invite._id }, { $set: { status: next, updatedAt: new Date() } });
+  const setFields: Record<string, unknown> = { status: next, updatedAt: new Date() };
+  if (next === 'accepted' && !invite.accessToken) {
+    setFields.accessToken = createOfferAccessToken();
+  }
+  await tenderInvites.updateOne({ _id: invite._id }, { $set: setFields });
   const updated = await tenderInvites.findOne({ _id: invite._id });
 
   if (next === 'accepted') {

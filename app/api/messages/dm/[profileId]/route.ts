@@ -15,9 +15,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ pro
   const otherId = new ObjectId(profileId);
   const myId = profile._id!;
 
-  const { messages, profiles } = await collections();
+  const { messages, profiles, tenders } = await collections();
   const rows = await messages.find({
-    kind: 'dm',
+    kind: { $in: ['dm', 'offer_thread'] },
     $or: [
       { senderProfileId: myId, receiverProfileId: otherId },
       { senderProfileId: otherId, receiverProfileId: myId },
@@ -25,7 +25,12 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ pro
   }).sort({ createdAt: 1 }).toArray();
 
   await messages.updateMany(
-    { kind: 'dm', senderProfileId: otherId, receiverProfileId: myId, isRead: false },
+    {
+      kind: { $in: ['dm', 'offer_thread'] },
+      senderProfileId: otherId,
+      receiverProfileId: myId,
+      isRead: false,
+    },
     { $set: { isRead: true } }
   );
 
@@ -33,10 +38,22 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ pro
   const senders = senderIds.length > 0
     ? await profiles.find({ _id: { $in: senderIds.map((sid) => new ObjectId(sid!)) } }).toArray()
     : [];
-  const senderById = new Map(senders.map((s) => [s._id!.toString(), s]));
+  const senderById = new Map(senders.map((s) => [s._id!.toString(), {
+    _id: s._id,
+    companyName: s.companyName,
+    userType: s.userType,
+  }]));
+
+  const tenderIds = [...new Set(rows.map((r) => r.tenderId?.toString()).filter(Boolean))] as string[];
+  const tenderDocs = tenderIds.length
+    ? await tenders.find({ _id: { $in: tenderIds.map((id) => new ObjectId(id)) } }).project({ title: 1, type: 1, status: 1 }).toArray()
+    : [];
+  const tenderById = new Map(tenderDocs.map((t) => [t._id!.toString(), t]));
+
   return NextResponse.json(rows.map((r) => ({
     ...r,
     sender: r.senderProfileId ? senderById.get(r.senderProfileId.toString()) ?? null : null,
+    tender: r.tenderId ? tenderById.get(r.tenderId.toString()) ?? null : null,
   })));
 }
 

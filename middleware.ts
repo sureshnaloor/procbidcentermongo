@@ -17,9 +17,11 @@ export default middlewareAuth((req) => {
     '/dashboard', '/tenders', '/bids', '/profile', '/documents',
     '/messages', '/vendors', '/settings', '/companies',
   ];
-  const isProtected = protectedPaths.some((p) => pathname.startsWith(p));
+  const isProtected = protectedPaths.some((p) => pathname.startsWith(p)) || pathname.startsWith('/offer');
   if (isProtected && !isLoggedIn) {
-    return NextResponse.redirect(new URL('/login', req.url));
+    const login = new URL('/login', req.url);
+    login.searchParams.set('callbackUrl', pathname + req.nextUrl.search);
+    return NextResponse.redirect(login);
   }
 
   // Suppliers may participate in tenders (prepare offers) but cannot create or edit them

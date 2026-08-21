@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Loader2, Send, MessageSquare, Hash, Info, Megaphone, AlertTriangle, Search } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
+import { Badge } from "@/components/ui/badge";
+import { PROCUREMENT_TYPES } from "@/lib/procurement";
 
 const CHANNEL_ICONS: Record<string, typeof Hash> = {
   information: Info,
@@ -63,6 +65,26 @@ export default function MessagesPage({ params }: { params: Promise<{ slug?: stri
     refetchInterval: 5000,
   });
 
+  const dmThreads = useMemo(() => {
+    const rows = Array.isArray(messages) ? (messages as any[]) : [];
+    const general: any[] = [];
+    const byPackage = new Map<string, { tender: any; messages: any[] }>();
+    for (const msg of rows) {
+      const tenderId = msg.tenderId ? String(msg.tenderId) : "";
+      if (msg.kind === "offer_thread" || tenderId) {
+        const key = tenderId || "unknown";
+        const existing = byPackage.get(key) ?? { tender: msg.tender || null, messages: [] };
+        if (msg.tender && !existing.tender) existing.tender = msg.tender;
+        existing.messages.push(msg);
+        byPackage.set(key, existing);
+      } else {
+        general.push(msg);
+      }
+    }
+    const packages = [...byPackage.entries()].map(([id, group]) => ({ id, ...group }));
+    return { general, packages };
+  }, [messages]);
+
   const contactType = profile?.userType === "vendor" ? "company" : profile?.userType === "company" ? "vendor" : null;
   const { data: contactsData, isLoading: loadingContacts } = useQuery({
     queryKey: ["dm-contacts", contactType],
@@ -116,16 +138,34 @@ export default function MessagesPage({ params }: { params: Promise<{ slug?: stri
       : "Type a message...";
 
   const [newMsg, setNewMsg] = useState("");
+  const [packageDrafts, setPackageDrafts] = useState<Record<string, string>>({});
   const sendMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (opts: { tenderId?: string; content?: string } = {}) => {
+      const content = (opts?.content ?? newMsg).trim();
+      if (!content) throw new Error("Enter a message");
+      if (isDM && opts?.tenderId) {
+        const vendorProfileId = profile?.userType === "vendor" ? String(profile._id) : String(targetId);
+        const res = await fetch("/api/offer-thread", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tenderId: opts.tenderId, vendorProfileId, content }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Failed to send");
+        return data;
+      }
       const url = isDM ? `/api/messages/dm/${targetId}` : `/api/messages/channel/${targetId}`;
-      const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content: newMsg }) });
+      const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content }) });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to send");
       return data;
     },
-    onSuccess: () => {
-      setNewMsg("");
+    onSuccess: (_data, opts) => {
+      if (opts?.tenderId) {
+        setPackageDrafts((prev) => ({ ...prev, [opts.tenderId!]: "" }));
+      } else {
+        setNewMsg("");
+      }
       qc.invalidateQueries({ queryKey: ["messages", isDM ? "dm" : "channel", targetId] });
       qc.invalidateQueries({ queryKey: ["conversations"] });
       qc.invalidateQueries({ queryKey: ["messages", "unread"] });
@@ -257,22 +297,88 @@ export default function MessagesPage({ params }: { params: Promise<{ slug?: stri
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
               {loadingMessages ? (
                 <div className="flex items-center justify-center py-8"><Loader2 className="animate-spin h-5 w-5 text-muted-foreground" /></div>
+              ) : isDM ? (
+                <div className="space-y-4">
+                  {dmThreads.packages.map((pkg) => {
+                    const typeKey = pkg.tender?.type as keyof typeof PROCUREMENT_TYPES | undefined;
+                    const typeLabel = typeKey && PROCUREMENT_TYPES[typeKey] ? PROCUREMENT_TYPES[typeKey].label : "Package";
+                    const draft = packageDrafts[pkg.id] ?? "";
+                    return (
+                      <div key={pkg.id} className="rounded-xl border border-border bg-card overflow-hidden">
+                        <div className="px-4 py-2.5 border-b border-border bg-muted/40 flex items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline" className="text-[10px] uppercase">{typeLabel}</Badge>
+                              {pkg.tender?.status && (
+                                <span className="text-[10px] text-muted-foreground capitalize">{String(pkg.tender.status).replace("_", " ")}</span>
+                              )}
+                            </div>
+                            <div className="text-sm font-semibold text-foreground truncate mt-0.5">
+                              {pkg.id !== "unknown" ? (
+                                <Link href={`/tenders/${pkg.id}`} className="hover:text-primary">
+                                  {pkg.tender?.title || "Package conversation"}
+                                </Link>
+                              ) : (
+                                pkg.tender?.title || "Package conversation"
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="p-3 space-y-3">
+                          {pkg.messages.map((m: any) => (
+                            <DirectMessageRow key={m._id} message={m} fallback={user?.role === "admin" ? "A" : "?"} />
+                          ))}
+                        </div>
+                        {pkg.id !== "unknown" && (
+                          <div className="border-t border-border p-2 flex gap-2">
+                            <Input
+                              value={draft}
+                              onChange={(e) => setPackageDrafts((prev) => ({ ...prev, [pkg.id]: e.target.value }))}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" && !e.shiftKey && draft.trim()) {
+                                  e.preventDefault();
+                                  sendMutation.mutate({ tenderId: pkg.id, content: draft });
+                                }
+                              }}
+                              placeholder={`Reply on this ${typeLabel}...`}
+                              className="h-8 text-xs"
+                              id={`package-msg-${pkg.id}`}
+                            />
+                            <Button
+                              size="icon"
+                              className="h-8 w-8"
+                              disabled={!draft.trim() || sendMutation.isPending}
+                              onClick={() => sendMutation.mutate({ tenderId: pkg.id, content: draft })}
+                            >
+                              <Send className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+
+                  <div className="rounded-xl border border-border bg-card overflow-hidden">
+                    <div className="px-4 py-2.5 border-b border-border bg-muted/40">
+                      <div className="text-sm font-semibold text-foreground">Direct messages</div>
+                      <p className="text-[11px] text-muted-foreground">Not tied to an RFQ, RFP, or tender.</p>
+                    </div>
+                    <div className="p-3 space-y-3 min-h-[4.5rem]">
+                      {dmThreads.general.length === 0 ? (
+                        <p className="text-center text-sm text-muted-foreground py-6">No general messages yet.</p>
+                      ) : (
+                        dmThreads.general.map((m: any) => (
+                          <DirectMessageRow key={m._id} message={m} fallback={user?.role === "admin" ? "A" : "?"} />
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
               ) : messages.length === 0 ? (
                 <p className="text-center text-sm text-muted-foreground py-8">No messages yet. Send the first one.</p>
               ) : (
                 (messages as any[]).map((m: any) => (
-                  <div key={m._id} className="flex gap-3">
-                    <div className="w-7 h-7 rounded-full bg-primary/10 dark:bg-primary/20 flex items-center justify-center text-xs font-semibold text-primary shrink-0">
-                      {m.sender?.companyName?.[0] ?? (user?.role === "admin" ? "A" : "?")}
-                    </div>
-                    <div>
-                      <div className="flex items-baseline gap-2">
-                        <span className="text-xs font-semibold text-foreground">{m.sender?.companyName ?? "Administrator"}</span>
-                        <span className="text-xs text-muted-foreground">{formatDistanceToNow(new Date(m.createdAt), { addSuffix: true })}</span>
-                      </div>
-                      <p className="text-sm text-foreground dark:text-muted-foreground mt-0.5">{m.content}</p>
-                    </div>
-                  </div>
+                  <DirectMessageRow key={m._id} message={m} fallback={user?.role === "admin" ? "A" : "?"} />
                 ))
               )}
             </div>
@@ -280,18 +386,35 @@ export default function MessagesPage({ params }: { params: Promise<{ slug?: stri
               <Input
                 value={newMsg}
                 onChange={(e) => setNewMsg(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && newMsg.trim() && canPost) sendMutation.mutate(); }}
-                placeholder={placeholder}
+                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && newMsg.trim() && canPost) sendMutation.mutate({}); }}
+                placeholder={isDM ? `General message to ${dmPartner?.companyName || "this contact"}...` : placeholder}
                 id="message-input"
                 className="flex-1"
                 disabled={!canPost}
               />
-              <Button size="icon" onClick={() => sendMutation.mutate()} disabled={!canPost || !newMsg.trim() || sendMutation.isPending} id="send-message-btn">
+              <Button size="icon" onClick={() => sendMutation.mutate({})} disabled={!canPost || !newMsg.trim() || sendMutation.isPending} id="send-message-btn">
                 <Send className="h-4 w-4" />
               </Button>
             </div>
           </>
         )}
+      </div>
+    </div>
+  );
+}
+
+function DirectMessageRow({ message: m, fallback }: { message: any; fallback: string }) {
+  return (
+    <div className="flex gap-3">
+      <div className="w-7 h-7 rounded-full bg-primary/10 dark:bg-primary/20 flex items-center justify-center text-xs font-semibold text-primary shrink-0">
+        {m.sender?.companyName?.[0] ?? fallback}
+      </div>
+      <div>
+        <div className="flex items-baseline gap-2">
+          <span className="text-xs font-semibold text-foreground">{m.sender?.companyName ?? "Administrator"}</span>
+          <span className="text-xs text-muted-foreground">{formatDistanceToNow(new Date(m.createdAt), { addSuffix: true })}</span>
+        </div>
+        <p className="text-sm text-foreground dark:text-muted-foreground mt-0.5 whitespace-pre-wrap">{m.content}</p>
       </div>
     </div>
   );

@@ -7,21 +7,18 @@ import {
 } from '@/lib/auth-helpers';
 import { saveTenderDocumentFile, TENDER_FILE_MAX_COUNT, TENDER_FILE_MAX_TOTAL_BYTES } from '@/lib/tender-files';
 import { normalizeTenderClauses } from '@/lib/clauses';
+import { DEFAULT_PROCUREMENT_TYPE, DOCUMENT_CATEGORY_VALUES, getPublishBlockers, getPublishDateIssues } from '@/lib/procurement';
+import { isOfferAuthorized } from '@/lib/tender-access';
 import type { Filter } from 'mongodb';
-import type { ITender } from '@/lib/types';
+import type { ITender, ITenderBoqItem } from '@/lib/types';
 
 function parseDateEndOfDay(value: string): Date {
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return new Date(`${value}T23:59:59`);
   return new Date(value);
 }
 
-function isBidDeadlineOpen(deadline?: Date): boolean {
-  if (!deadline) return true;
-  return deadline.getTime() >= Date.now();
-}
-
 const tenderDocumentInput = z.object({
-  category: z.enum(['drawing', 'terms', 'other']),
+  category: z.enum(DOCUMENT_CATEGORY_VALUES),
   fileName: z.string().min(1).max(255),
   fileType: z.string().optional(),
   fileBase64: z.string().min(1),
@@ -35,6 +32,24 @@ const tenderClauseInput = z.object({
   required: z.boolean().default(true),
 });
 
+const tenderBoqItemInput = z.object({
+  description: z.string().min(1).max(500),
+  quantity: z.number().positive(),
+  unit: z.string().min(1).max(40),
+  groupId: z.string().optional(),
+  itemId: z.string().optional(),
+});
+
+function normalizeBoqItems(items: z.infer<typeof tenderBoqItemInput>[]): ITenderBoqItem[] {
+  return items.map((item) => ({
+    description: item.description.trim(),
+    quantity: item.quantity,
+    unit: item.unit.trim(),
+    groupId: item.groupId && ObjectId.isValid(item.groupId) ? new ObjectId(item.groupId) : undefined,
+    itemId: item.itemId && ObjectId.isValid(item.itemId) ? new ObjectId(item.itemId) : undefined,
+  }));
+}
+
 export async function GET(req: NextRequest) {
   const session = await getSession();
 
@@ -46,10 +61,11 @@ export async function GET(req: NextRequest) {
   const offset = parseInt(searchParams.get('offset') ?? '0');
   const forAdmin = searchParams.get('forAdmin') === 'true';
 
-  const { tenders } = await collections();
+  const { tenders, profiles, tenderInvites, bids } = await collections();
   const profile = session && session.user.role !== 'admin' ? await getProfileForUser(session.user.id) : null;
 
   const filter: Filter<ITender> = {};
+  const mine = searchParams.get('mine') === '1';
 
   if (session) {
     if (forAdmin && session.user.role === 'admin') {
@@ -57,14 +73,29 @@ export async function GET(req: NextRequest) {
     } else if (profile?.userType === 'company') {
       filter.companyProfileId = profile._id!;
     } else if (profile?.userType === 'vendor') {
-      filter.status = { $in: ['published', 'closed', 'awarded'] };
+      if (mine) {
+        const [invites, ownBids] = await Promise.all([
+          tenderInvites.find({
+            vendorProfileId: profile._id!,
+            status: { $in: ['invited', 'accepted', 'requested'] },
+          }).toArray(),
+          bids.find({ vendorProfileId: profile._id! }).project({ tenderId: 1 }).toArray(),
+        ]);
+        const idSet = new Set([
+          ...invites.map((i) => i.tenderId.toString()),
+          ...ownBids.map((b) => b.tenderId.toString()),
+        ]);
+        if (idSet.size === 0) return NextResponse.json({ items: [], total: 0 });
+        filter._id = { $in: [...idSet].map((id) => new ObjectId(id)) };
+      } else {
+        filter.status = { $in: ['published', 'closed', 'awarded'] };
+      }
     } else if (session.user.role === 'admin') {
       // Admin without profile sees all
     } else {
       filter.status = { $in: ['published', 'closed', 'awarded'] };
     }
   } else {
-    // Unauthenticated user
     filter.status = { $in: ['published', 'closed', 'awarded'] };
   }
 
@@ -80,7 +111,46 @@ export async function GET(req: NextRequest) {
     tenders.countDocuments(filter),
   ]);
 
-  return NextResponse.json({ items, total });
+  if (!profile || profile.userType !== 'vendor' || items.length === 0) {
+    return NextResponse.json({ items, total });
+  }
+
+  const tenderIds = items.map((t) => t._id!);
+  const companyIds = [...new Set(items.map((t) => t.companyProfileId.toString()))].map((id) => new ObjectId(id));
+  const [companies, invites, ownBids] = await Promise.all([
+    companyIds.length ? profiles.find({ _id: { $in: companyIds } }).toArray() : Promise.resolve([]),
+    tenderInvites.find({ vendorProfileId: profile._id!, tenderId: { $in: tenderIds } }).toArray(),
+    bids.find({ vendorProfileId: profile._id!, tenderId: { $in: tenderIds } }).sort({ createdAt: -1 }).toArray(),
+  ]);
+  const companyById = new Map(companies.map((c) => [c._id!.toString(), {
+    _id: c._id,
+    companyName: c.companyName,
+    city: c.city,
+    country: c.country,
+  }]));
+  const inviteByTender = new Map(invites.map((i) => [i.tenderId.toString(), i]));
+  const bidsByTender = new Map<string, typeof ownBids>();
+  for (const bid of ownBids) {
+    const key = bid.tenderId.toString();
+    const list = bidsByTender.get(key) ?? [];
+    list.push(bid);
+    bidsByTender.set(key, list);
+  }
+
+  const enriched = items.map((tender) => {
+    const invite = inviteByTender.get(tender._id!.toString());
+    const myBids = bidsByTender.get(tender._id!.toString()) ?? [];
+    return {
+      ...tender,
+      company: companyById.get(tender.companyProfileId.toString()) ?? null,
+      participation: invite
+        ? { status: invite.status, canPrepareOffer: isOfferAuthorized(invite.status) && myBids.length === 0 }
+        : { status: null, canPrepareOffer: false },
+      myBids,
+    };
+  });
+
+  return NextResponse.json({ items: enriched, total });
 }
 
 export async function POST(req: NextRequest) {
@@ -93,7 +163,8 @@ export async function POST(req: NextRequest) {
   const data = z.object({
     title: z.string().min(1),
     description: z.string().optional(),
-    type: z.enum(['rfp', 'rfq', 'tender']),
+    type: z.enum(['rfp', 'rfq', 'tender']).default(DEFAULT_PROCUREMENT_TYPE),
+    status: z.enum(['draft', 'published']).default('draft'),
     bidDeadline: z.string().optional(),
     deliveryDeadline: z.string().optional(),
     estimatedValue: z.number().optional(),
@@ -103,8 +174,24 @@ export async function POST(req: NextRequest) {
     termsConditions: z.string().optional(),
     groupIds: z.array(z.string()).min(1, 'Select at least one material or service group'),
     clauses: z.array(tenderClauseInput).default([]),
+    boqItems: z.array(tenderBoqItemInput).default([]),
     documents: z.array(tenderDocumentInput).max(TENDER_FILE_MAX_COUNT).default([]),
   }).parse(body);
+
+  const boqItems = normalizeBoqItems(data.boqItems);
+  if (data.status === 'published') {
+    const blockers = [
+      ...getPublishBlockers({
+        type: data.type,
+        documents: data.documents,
+        boqItems,
+      }),
+      ...getPublishDateIssues(data.bidDeadline, data.deliveryDeadline).blockers,
+    ];
+    if (blockers.length > 0) {
+      return NextResponse.json({ error: blockers[0], blockers }, { status: 400 });
+    }
+  }
 
   const savedFiles: { storedName: string }[] = [];
   try {
@@ -136,7 +223,7 @@ export async function POST(req: NextRequest) {
       title: data.title,
       description: data.description,
       type: data.type,
-      status: 'published',
+      status: data.status,
       bidDeadline: data.bidDeadline ? parseDateEndOfDay(data.bidDeadline) : undefined,
       deliveryDeadline: data.deliveryDeadline ? parseDateEndOfDay(data.deliveryDeadline) : undefined,
       estimatedValue: data.estimatedValue,
@@ -146,6 +233,7 @@ export async function POST(req: NextRequest) {
       termsConditions: data.termsConditions,
       groupIds: data.groupIds.map((id) => new ObjectId(id)),
       clauses: normalizeTenderClauses(data.clauses),
+      boqItems,
       documents: storedDocs,
       createdAt: now,
       updatedAt: now,

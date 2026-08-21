@@ -73,6 +73,14 @@ function SettingsClient() {
   const [newCustom, setNewCustom] = useState({ title: "", body: "" });
   const [docCategory, setDocCategory] = useState("balance_sheet");
   const [uploading, setUploading] = useState(false);
+  const [dscForm, setDscForm] = useState({
+    enabled: false,
+    holderName: "",
+    serialNumber: "",
+    issuer: "",
+    validFrom: "",
+    validTo: "",
+  });
 
   useEffect(() => {
     if (!profile) return;
@@ -93,6 +101,18 @@ function SettingsClient() {
       city: profile.city || "",
       address: profile.address || "",
       description: profile.description || "",
+    });
+    setDscForm({
+      enabled: Boolean(profile.dsc?.enabled),
+      holderName: profile.dsc?.holderName || "",
+      serialNumber: profile.dsc?.serialNumber || "",
+      issuer: profile.dsc?.issuer || "",
+      validFrom: profile.dsc?.validFrom && !Number.isNaN(new Date(profile.dsc.validFrom).getTime())
+        ? new Date(profile.dsc.validFrom).toISOString().slice(0, 10)
+        : "",
+      validTo: profile.dsc?.validTo && !Number.isNaN(new Date(profile.dsc.validTo).getTime())
+        ? new Date(profile.dsc.validTo).toISOString().slice(0, 10)
+        : "",
     });
   }, [profile]);
 
@@ -179,6 +199,36 @@ function SettingsClient() {
     },
     onSuccess: () => {
       toast.success("Supplier profile saved");
+      qc.invalidateQueries({ queryKey: ["profile"] });
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const saveDsc = useMutation({
+    mutationFn: async () => {
+      if (dscForm.enabled && (!dscForm.holderName.trim() || !dscForm.serialNumber.trim())) {
+        throw new Error("Enter the DSC holder name and certificate serial number");
+      }
+      const res = await fetch(`/api/profile/${profile._id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          dsc: {
+            enabled: dscForm.enabled,
+            holderName: dscForm.holderName,
+            serialNumber: dscForm.serialNumber,
+            issuer: dscForm.issuer,
+            validFrom: dscForm.validFrom || null,
+            validTo: dscForm.validTo || null,
+          },
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to save DSC");
+      return data;
+    },
+    onSuccess: () => {
+      toast.success(dscForm.enabled ? "Digital signature certificate saved" : "DSC signing turned off");
       qc.invalidateQueries({ queryKey: ["profile"] });
     },
     onError: (err: Error) => toast.error(err.message),
@@ -370,6 +420,54 @@ function SettingsClient() {
     </Card>
   );
 
+  const vendorDscForm = (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Digital signature certificate (DSC)</CardTitle>
+        <p className="text-xs text-muted-foreground">
+          If you have a Class 2/3 DSC, register it here. Submitting an offer will then require you to digitally sign it.
+          Browser USB-token signing is not available; print the offer, sign it with your DSC software if required, and attach the signed PDF at submit.
+        </p>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={dscForm.enabled}
+            onChange={(e) => setDscForm((prev) => ({ ...prev, enabled: e.target.checked }))}
+            id="dsc-enabled"
+          />
+          I have a DSC and want to digitally sign offers
+        </label>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <Label>Certificate holder name</Label>
+            <Input value={dscForm.holderName} onChange={(e) => setDscForm((p) => ({ ...p, holderName: e.target.value }))} id="dsc-holder" />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Certificate serial number</Label>
+            <Input value={dscForm.serialNumber} onChange={(e) => setDscForm((p) => ({ ...p, serialNumber: e.target.value }))} id="dsc-serial" />
+          </div>
+          <div className="md:col-span-2 space-y-1.5">
+            <Label>Issuing authority</Label>
+            <Input value={dscForm.issuer} onChange={(e) => setDscForm((p) => ({ ...p, issuer: e.target.value }))} placeholder="e.g. eMudhra, Capricorn, (n)Code" id="dsc-issuer" />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Valid from</Label>
+            <Input type="date" value={dscForm.validFrom} onChange={(e) => setDscForm((p) => ({ ...p, validFrom: e.target.value }))} id="dsc-valid-from" />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Valid to</Label>
+            <Input type="date" value={dscForm.validTo} onChange={(e) => setDscForm((p) => ({ ...p, validTo: e.target.value }))} id="dsc-valid-to" />
+          </div>
+        </div>
+        <Button onClick={() => saveDsc.mutate()} disabled={saveDsc.isPending || !profile?._id} id="save-dsc-btn">
+          {saveDsc.isPending ? <><Loader2 className="animate-spin h-4 w-4" />Saving...</> : "Save DSC"}
+        </Button>
+      </CardContent>
+    </Card>
+  );
+
   return (
     <div className="max-w-3xl mx-auto space-y-6">
       <div>
@@ -415,6 +513,7 @@ function SettingsClient() {
 
         <TabsContent value="profile" className="mt-4 space-y-6">
           {isVendor && vendorProfileForm}
+          {isVendor && vendorDscForm}
           {isCompany && profile && (
           <Card>
             <CardHeader>

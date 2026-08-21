@@ -22,6 +22,14 @@ const updateSchema = z.object({
   turnoverYear: z.number().int().min(1900).max(2100).optional().nullable(),
   taxId: z.string().optional(),
   industry: z.string().optional(),
+  dsc: z.object({
+    enabled: z.boolean(),
+    holderName: z.string().max(120).optional(),
+    serialNumber: z.string().max(80).optional(),
+    issuer: z.string().max(200).optional(),
+    validFrom: z.string().optional().nullable(),
+    validTo: z.string().optional().nullable(),
+  }).optional(),
 }).partial();
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -57,6 +65,25 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const set: Record<string, unknown> = { updatedAt: new Date() };
   const unset: Record<string, ''> = {};
   for (const [key, value] of Object.entries(data)) {
+    if (key === 'dsc' && value && typeof value === 'object') {
+      const dsc = value as {
+        enabled: boolean;
+        holderName?: string;
+        serialNumber?: string;
+        issuer?: string;
+        validFrom?: string | null;
+        validTo?: string | null;
+      };
+      set.dsc = {
+        enabled: Boolean(dsc.enabled),
+        holderName: dsc.holderName?.trim() || undefined,
+        serialNumber: dsc.serialNumber?.trim() || undefined,
+        issuer: dsc.issuer?.trim() || undefined,
+        validFrom: dsc.validFrom ? new Date(dsc.validFrom) : undefined,
+        validTo: dsc.validTo ? new Date(dsc.validTo) : undefined,
+      };
+      continue;
+    }
     if (value === null) unset[key] = '';
     else if (value !== undefined) set[key] = value;
   }

@@ -17,7 +17,7 @@ export default async function NewTenderPage() {
     <div className="max-w-3xl mx-auto space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-foreground">Create New Tender</h1>
-        <p className="text-sm text-muted-foreground mt-1">Publish a package so suppliers can prepare offers.</p>
+        <p className="text-sm text-muted-foreground mt-1">Starts as a private draft. RFQ is the default — publish only when the required documents are attached.</p>
       </div>
       <TenderForm mode="create" />
     </div>

@@ -3,13 +3,20 @@
 import { use } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
+import { useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Loader2, ArrowLeft, Check, X, RotateCcw, SendHorizontal } from "lucide-react";
+import { Loader2, ArrowLeft, Check, X, RotateCcw, SendHorizontal, Pencil, Ban, Eye, Printer } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
+import { clauseKey } from "@/lib/clauses";
+import { wordsDiffer } from "@/lib/text-diff";
+import { ClauseDiffText } from "@/components/clause-diff";
+import { formatDelivery } from "@/lib/bid-line";
+import { OfferConfirmDialog, type OfferConfirmKind, type OfferConfirmPayload } from "@/components/offer-confirm-dialog";
+import { OfferThreadPanel } from "@/components/offer-thread-panel";
 
 const STATUS_COLORS: Record<string, "default" | "secondary" | "destructive" | "outline" | "success" | "warning"> = {
   draft: "secondary", submitted: "default", under_review: "warning", shortlisted: "success",
@@ -22,6 +29,7 @@ export default function BidDetailPage({ params }: { params: Promise<{ id: string
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const user = (session as any)?.user;
   const qc = useQueryClient();
+  const [confirmKind, setConfirmKind] = useState<OfferConfirmKind | null>(null);
 
   const { data: bid, isLoading } = useQuery({
     queryKey: ["bid", id],
@@ -36,25 +44,73 @@ export default function BidDetailPage({ params }: { params: Promise<{ id: string
   });
 
   const submitMutation = useMutation({
-    mutationFn: () => fetch(`/api/bids/${id}/submit`, { method: "POST" }).then((r) => r.json()),
-    onSuccess: () => { toast.success("Bid submitted"); qc.invalidateQueries({ queryKey: ["bid", id] }); },
-    onError: () => toast.error("Failed to submit"),
+    mutationFn: async (payload: OfferConfirmPayload) => {
+      const res = await fetch(`/api/bids/${id}/submit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to submit");
+      return data;
+    },
+    onSuccess: () => {
+      setConfirmKind(null);
+      toast.success("Bid submitted");
+      qc.invalidateQueries({ queryKey: ["bid", id] });
+    },
+    onError: (err: Error) => toast.error(err.message || "Failed to submit"),
   });
 
   const withdrawMutation = useMutation({
-    mutationFn: () => fetch(`/api/bids/${id}/withdraw`, { method: "POST" }).then((r) => r.json()),
-    onSuccess: () => { toast.success("Bid withdrawn"); qc.invalidateQueries({ queryKey: ["bid", id] }); },
-    onError: () => toast.error("Failed to withdraw"),
+    mutationFn: async () => {
+      const res = await fetch(`/api/bids/${id}/withdraw`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to withdraw");
+      return data;
+    },
+    onSuccess: () => {
+      setConfirmKind(null);
+      toast.success("Bid withdrawn");
+      qc.invalidateQueries({ queryKey: ["bid", id] });
+      qc.invalidateQueries({ queryKey: ["bids"] });
+    },
+    onError: (err: Error) => toast.error(err.message || "Failed to withdraw"),
+  });
+
+  const blacklistMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/blacklist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          vendorProfileId: bid.vendorProfileId,
+          relatedTenderId: bid.tenderId,
+          relatedBidId: id,
+          reason: "Withdrawn offer",
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to blacklist");
+      return data;
+    },
+    onSuccess: () => { toast.success("Supplier blacklisted"); qc.invalidateQueries({ queryKey: ["bid", id] }); },
+    onError: (err: Error) => toast.error(err.message),
   });
 
   if (isLoading) return <div className="flex items-center justify-center py-16"><Loader2 className="animate-spin h-6 w-6 text-muted-foreground" /></div>;
   if (!bid) return <div className="text-center py-16 text-muted-foreground">Bid not found or access denied</div>;
 
-  const isVendorOwner = profile?.userType === "vendor" && bid.vendorProfileId === profile?._id;
-  const isCompanyOwner = profile?.userType === "company" && bid.tender?.companyProfileId === profile?._id;
+  const isVendorOwner = profile?.userType === "vendor" && String(bid.vendorProfileId) === String(profile?._id);
+  const isCompanyOwner = profile?.userType === "company" && String(bid.tender?.companyProfileId) === String(profile?._id);
+  const showThread = (isVendorOwner || isCompanyOwner) && Boolean(bid.tenderId && bid.vendorProfileId);
+  const counterpartName = isVendorOwner
+    ? (bid.tender?.company?.companyName || "Company")
+    : (bid.vendor?.companyName || "Supplier");
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
+    <div className="max-w-6xl mx-auto flex flex-col lg:flex-row gap-6 items-start">
+    <div className="flex-1 min-w-0 max-w-3xl mx-auto lg:mx-0 space-y-6">
       <div className="flex items-center gap-3">
         <Link href="/bids"><Button variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button></Link>
         <div className="flex-1">
@@ -68,17 +124,54 @@ export default function BidDetailPage({ params }: { params: Promise<{ id: string
 
       {/* Vendor actions */}
       {isVendorOwner && (
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <Link href={`/bids/${id}/preview`}>
+            <Button size="sm" variant="outline" id="preview-bid-btn">
+              <Eye /> Preview
+            </Button>
+          </Link>
+          <Link href={`/bids/${id}/preview?print=1`}>
+            <Button size="sm" variant="outline" id="print-bid-btn">
+              <Printer /> Print
+            </Button>
+          </Link>
+          {bid.canModify && (
+            <Link href={`/bids/${id}/edit`}>
+              <Button size="sm" variant="outline" id="modify-bid-btn">
+                <Pencil /> Modify
+              </Button>
+            </Link>
+          )}
           {bid.status === "draft" && (
-            <Button size="sm" onClick={() => submitMutation.mutate()} disabled={submitMutation.isPending} id="submit-bid-btn">
-              <SendHorizontal /> {submitMutation.isPending ? "Submitting..." : "Submit Bid"}
+            <Button size="sm" onClick={() => setConfirmKind("submit")} disabled={submitMutation.isPending} id="submit-bid-btn">
+              <SendHorizontal /> Submit
             </Button>
           )}
-          {["draft", "submitted"].includes(bid.status) && (
-            <Button size="sm" variant="outline" onClick={() => withdrawMutation.mutate()} disabled={withdrawMutation.isPending} id="withdraw-bid-btn">
+          {bid.canWithdraw && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setConfirmKind(bid.status === "draft" ? "withdraw-draft" : "withdraw-submitted")}
+              disabled={withdrawMutation.isPending}
+              id="withdraw-bid-btn"
+            >
               <RotateCcw /> Withdraw
             </Button>
           )}
+        </div>
+      )}
+      {isCompanyOwner && (
+        <div className="flex flex-wrap gap-2">
+          <Link href={`/bids/${id}/preview`}>
+            <Button size="sm" variant="outline" id="company-preview-bid-btn">
+              <Eye /> Preview
+            </Button>
+          </Link>
+          <Link href={`/bids/${id}/preview?print=1`}>
+            <Button size="sm" variant="outline" id="company-print-bid-btn">
+              <Printer /> Print
+            </Button>
+          </Link>
         </div>
       )}
 
@@ -89,6 +182,18 @@ export default function BidDetailPage({ params }: { params: Promise<{ id: string
           <Button size="sm" variant="outline" onClick={() => statusMutation.mutate("shortlisted")} id="shortlist-btn">Shortlist</Button>
           <Button size="sm" onClick={() => statusMutation.mutate("accepted")} id="accept-bid-btn"><Check /> Accept</Button>
           <Button size="sm" variant="outline" onClick={() => statusMutation.mutate("rejected")} id="reject-bid-btn"><X /> Reject</Button>
+        </div>
+      )}
+      {isCompanyOwner && bid.status === "withdrawn" && (
+        <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 space-y-2">
+          <p className="text-sm text-foreground">This offer was withdrawn. Withdrawn offers stay on record permanently.</p>
+          {bid.blacklisted ? (
+            <Badge variant="destructive">Supplier blacklisted</Badge>
+          ) : (
+            <Button size="sm" variant="outline" onClick={() => { if (confirm("Blacklist this supplier? They will not be able to offer on your packages.")) blacklistMutation.mutate(); }} disabled={blacklistMutation.isPending} id="blacklist-vendor-btn">
+              <Ban /> Blacklist supplier
+            </Button>
+          )}
         </div>
       )}
       {isCompanyOwner && bid.status === "shortlisted" && (
@@ -106,36 +211,99 @@ export default function BidDetailPage({ params }: { params: Promise<{ id: string
           <div><span className="text-muted-foreground">Currency</span><div className="font-semibold">{bid.currency}</div></div>
           <div><span className="text-muted-foreground">Validity</span><div className="font-semibold">{bid.validityDays} days</div></div>
           {bid.submittedAt && <div><span className="text-muted-foreground">Submitted</span><div className="font-semibold">{formatDistanceToNow(new Date(bid.submittedAt), { addSuffix: true })}</div></div>}
+          {bid.withdrawnAt && <div><span className="text-muted-foreground">Withdrawn</span><div className="font-semibold">{formatDistanceToNow(new Date(bid.withdrawnAt), { addSuffix: true })}</div></div>}
           {bid.vendor && <div className="col-span-2"><span className="text-muted-foreground">Vendor</span><div className="font-semibold">{bid.vendor.companyName}</div></div>}
+          {bid.signature && (
+            <div className="col-span-2 rounded-md border border-border bg-muted/40 p-3 space-y-1">
+              <div className="font-medium">Digitally signed (DSC)</div>
+              <div className="text-muted-foreground">Holder: <span className="text-foreground">{bid.signature.holderName}</span></div>
+              <div className="text-muted-foreground">Serial: <span className="font-mono text-foreground">{bid.signature.serialNumber}</span></div>
+              {bid.signature.issuer && <div className="text-muted-foreground">Issuer: <span className="text-foreground">{bid.signature.issuer}</span></div>}
+              <div className="text-muted-foreground break-all">Hash: <span className="font-mono text-xs text-foreground">{bid.signature.documentHash}</span></div>
+              {bid.signature.signedPdfUrl && (
+                <a href={bid.signature.signedPdfUrl} className="text-primary hover:underline" target="_blank" rel="noreferrer">
+                  Download signed file
+                </a>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 
       {bid.lineItems?.length > 0 && (
         <Card>
-          <CardHeader><CardTitle className="text-base">Line Items</CardTitle></CardHeader>
-          <CardContent>
+          <CardHeader><CardTitle className="text-base">Line Items ({bid.currency})</CardTitle></CardHeader>
+          <CardContent className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-muted-foreground border-b border-border">
                   <th className="pb-2 font-medium">Description</th>
-                  <th className="pb-2 font-medium text-right">Qty</th>
+                  <th className="pb-2 font-medium text-right">Quantity</th>
                   <th className="pb-2 font-medium">Unit</th>
-                  <th className="pb-2 font-medium text-right">Unit Price</th>
-                  <th className="pb-2 font-medium text-right">Total</th>
+                  <th className="pb-2 font-medium">Delivery</th>
+                  <th className="pb-2 font-medium text-right">Unit price ({bid.currency})</th>
+                  <th className="pb-2 font-medium text-right">Total line item price ({bid.currency})</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border dark:divide-border">
                 {bid.lineItems.map((item: any, i: number) => (
                   <tr key={i}>
-                    <td className="py-2">{item.description}</td>
-                    <td className="py-2 text-right">{item.quantity}</td>
-                    <td className="py-2 pl-2">{item.unit}</td>
-                    <td className="py-2 text-right">{item.unitPrice.toLocaleString()}</td>
-                    <td className="py-2 text-right font-medium">{item.totalPrice.toLocaleString()}</td>
+                    <td className="py-2 align-top">
+                      <div>{item.description}</div>
+                      {item.notes && <div className="text-xs text-muted-foreground mt-1 whitespace-pre-wrap">Remarks: {item.notes}</div>}
+                      {item.customFields?.length > 0 && (
+                        <div className="mt-1 space-y-0.5">
+                          {item.customFields.map((field: any, fi: number) => (
+                            <div key={fi} className="text-xs text-muted-foreground">
+                              <span className="font-medium text-foreground">{field.label}:</span> {field.value}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </td>
+                    <td className="py-2 text-right align-top">{item.quantity}</td>
+                    <td className="py-2 pl-2 align-top">{item.unit}</td>
+                    <td className="py-2 align-top">{formatDelivery(item) || "—"}</td>
+                    <td className="py-2 text-right align-top">{Number(item.unitPrice || 0).toLocaleString()}</td>
+                    <td className="py-2 text-right font-medium align-top">{Number(item.totalPrice || 0).toLocaleString()}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
+          </CardContent>
+        </Card>
+      )}
+
+      {(bid.clauseResponses?.length > 0 || bid.tender?.clauses?.length > 0) && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Terms response</CardTitle>
+            <p className="text-xs text-muted-foreground mt-1">Edited wording is shown in red so the company and supplier can see every change.</p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {(bid.tender?.clauses ?? bid.clauseResponses ?? []).map((clause: any, i: number) => {
+              const response = (bid.clauseResponses ?? []).find((r: any) => clauseKey(r) === clauseKey(clause));
+              const original = response?.originalBody || clause.body || "";
+              const proposed = response?.proposedBody || original;
+              const modified = Boolean(response?.accepted) && wordsDiffer(original, proposed);
+              return (
+                <div key={clause.slug || clause.kind || i} className="rounded-lg border border-border p-3 space-y-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <div className="text-sm font-medium">{clause.title || response?.kind}</div>
+                    {!response?.accepted && <Badge variant="outline">Not accepted</Badge>}
+                    {response?.accepted && !modified && <Badge variant="success">Accepted as written</Badge>}
+                    {modified && <Badge variant="destructive">Accepted with conditions</Badge>}
+                  </div>
+                  {modified ? (
+                    <div className="text-sm">
+                      <ClauseDiffText original={original} proposed={proposed} />
+                    </div>
+                  ) : (
+                    <p className="text-sm text-foreground dark:text-muted-foreground whitespace-pre-wrap">{original}</p>
+                  )}
+                </div>
+              );
+            })}
           </CardContent>
         </Card>
       )}
@@ -164,6 +332,29 @@ export default function BidDetailPage({ params }: { params: Promise<{ id: string
           </CardContent>
         </Card>
       )}
+
+      {isVendorOwner && confirmKind && (
+        <OfferConfirmDialog
+          open={Boolean(confirmKind)}
+          kind={confirmKind}
+          dsc={profile?.dsc}
+          pending={submitMutation.isPending || withdrawMutation.isPending}
+          onOpenChange={(open) => { if (!open) setConfirmKind(null); }}
+          onProceed={(payload) => {
+            if (confirmKind === "submit") submitMutation.mutate(payload);
+            else withdrawMutation.mutate();
+          }}
+        />
+      )}
+    </div>
+    {showThread && (
+      <OfferThreadPanel
+        tenderId={String(bid.tenderId)}
+        vendorProfileId={String(bid.vendorProfileId)}
+        bidId={id}
+        counterpartName={counterpartName}
+      />
+    )}
     </div>
   );
 }

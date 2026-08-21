@@ -5,6 +5,9 @@ import { collections } from '@/lib/db';
 import { requireAuth, isNextResponse, getProfileForUser, requireCompanyProfile } from '@/lib/auth-helpers';
 import { saveTenderDocumentFile } from '@/lib/tender-files';
 import { normalizeTenderClauses } from '@/lib/clauses';
+import { DOCUMENT_CATEGORY_VALUES, getPublishBlockers, getPublishDateIssues } from '@/lib/procurement';
+import { ensureInviteAccessToken, isVendorBlacklisted } from '@/lib/offer-link';
+import type { ITenderBoqItem } from '@/lib/types';
 
 function parseDateEndOfDay(value: string): Date {
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return new Date(`${value}T23:59:59`);
@@ -19,6 +22,24 @@ function isBidDeadlineOpen(deadline?: Date | null): boolean {
 function isBiddingClosed(tender: { status: string; bidDeadline?: Date | null }): boolean {
   if (['closed','awarded','cancelled'].includes(tender.status)) return true;
   return !isBidDeadlineOpen(tender.bidDeadline);
+}
+
+const tenderBoqItemInput = z.object({
+  description: z.string().min(1).max(500),
+  quantity: z.number().positive(),
+  unit: z.string().min(1).max(40),
+  groupId: z.string().optional(),
+  itemId: z.string().optional(),
+});
+
+function normalizeBoqItems(items: z.infer<typeof tenderBoqItemInput>[]): ITenderBoqItem[] {
+  return items.map((item) => ({
+    description: item.description.trim(),
+    quantity: item.quantity,
+    unit: item.unit.trim(),
+    groupId: item.groupId && ObjectId.isValid(item.groupId) ? new ObjectId(item.groupId) : undefined,
+    itemId: item.itemId && ObjectId.isValid(item.itemId) ? new ObjectId(item.itemId) : undefined,
+  }));
 }
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -42,7 +63,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     return NextResponse.json(null);
   }
 
-  const { materialServiceGroups, materialServiceTypes, tenderInvites } = await collections();
+  const { materialServiceGroups, materialServiceTypes, tenderInvites, bids } = await collections();
   const company = await profiles.findOne({ _id: tender.companyProfileId });
   const groups = await Promise.all(
     tender.groupIds.map(async (gid) => {
@@ -55,19 +76,49 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const myInvite = isVendor && profile?._id
     ? await tenderInvites.findOne({ tenderId: tender._id!, vendorProfileId: profile._id })
     : null;
-  const canPrepareOffer = isVendor && !isBiddingClosed(tender) && (myInvite?.status === 'invited' || myInvite?.status === 'accepted');
+  const myBid = isVendor && profile?._id
+    ? await bids.find({ tenderId: tender._id!, vendorProfileId: profile._id }).sort({ createdAt: -1 }).limit(1).next()
+    : null;
+  const blacklisted = isVendor && profile?._id
+    ? await isVendorBlacklisted(tender.companyProfileId, profile._id)
+    : false;
+  const canPrepareOffer = isVendor && !isBiddingClosed(tender) && !blacklisted && !myBid && (myInvite?.status === 'invited' || myInvite?.status === 'accepted');
+  const canModifyOffer = isVendor && !isBiddingClosed(tender) && myBid?.status === 'draft';
+  let offerAccessPath: string | null = null;
+  if (myInvite && (myInvite.status === 'invited' || myInvite.status === 'accepted')) {
+    const token = await ensureInviteAccessToken(myInvite);
+    offerAccessPath = `/offer/${token}`;
+  }
+
+  const canEdit = isOwner && tender.status === 'draft';
+  const publishBlockers = [
+    ...getPublishBlockers({
+      type: tender.type,
+      documents: tender.documents,
+      boqItems: tender.boqItems,
+    }),
+    ...getPublishDateIssues(tender.bidDeadline, tender.deliveryDeadline).blockers,
+  ];
+  const publishWarnings = isOwner
+    ? getPublishDateIssues(tender.bidDeadline, tender.deliveryDeadline).warnings
+    : [];
 
   return NextResponse.json({
     ...tender,
     categories: groups.filter(Boolean),
     company,
     biddingClosed: isBiddingClosed(tender),
-    canEdit: isOwner && isBidDeadlineOpen(tender.bidDeadline),
+    canEdit,
+    canPublish: isOwner && tender.status === 'draft' && publishBlockers.length === 0,
+    publishBlockers: isOwner ? publishBlockers : [],
+    publishWarnings,
     canExtendDeadline: isOwner,
     canDelete: isOwner,
     participation: myInvite
-      ? { status: myInvite.status, inviteId: myInvite._id, canPrepareOffer }
-      : { status: null, inviteId: null, canPrepareOffer: false },
+      ? { status: myInvite.status, inviteId: myInvite._id, canPrepareOffer, canModifyOffer, offerAccessPath }
+      : { status: null, inviteId: null, canPrepareOffer: false, canModifyOffer: false, offerAccessPath: null },
+    myBid: myBid ? { _id: myBid._id, status: myBid.status } : null,
+    blacklisted,
   });
 }
 
@@ -86,7 +137,6 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     return NextResponse.json({ error: 'You can only edit your own tenders' }, { status: 403 });
   }
 
-  const deadlineOpen = isBidDeadlineOpen(tender.bidDeadline);
   const body = await req.json();
   const data = z.object({
     title: z.string().optional(),
@@ -108,21 +158,31 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       body: z.string().min(1),
       required: z.boolean().default(true),
     })).optional(),
+    boqItems: z.array(tenderBoqItemInput).optional(),
     documents: z.array(z.object({
-      category: z.enum(['drawing','terms','other']),
+      category: z.enum(DOCUMENT_CATEGORY_VALUES),
       fileName: z.string(),
       fileType: z.string().optional(),
       fileBase64: z.string(),
     })).optional(),
   }).parse(body);
 
-  const nextDeadline = data.bidDeadline ? parseDateEndOfDay(data.bidDeadline) : undefined;
-  const isExtending = nextDeadline && nextDeadline.getTime() >= Date.now();
-  if (!deadlineOpen && !isExtending && data.bidDeadline === undefined) {
-    if (Object.keys(data).some(k => !['bidDeadline','deliveryDeadline','status'].includes(k) && data[k as keyof typeof data] !== undefined)) {
-      return NextResponse.json({ error: 'Tender can no longer be edited — extend the deadline first' }, { status: 400 });
+  if (tender.status !== 'draft' && data.status === 'draft') {
+    return NextResponse.json({ error: 'A published package cannot be reverted to draft' }, { status: 400 });
+  }
+
+  const publishing = data.status === 'published' && tender.status !== 'published';
+  if (tender.status !== 'draft' && !publishing) {
+    const extras = Object.keys(data).filter(
+      (k) => k !== 'status' && data[k as keyof typeof data] !== undefined
+    );
+    if (extras.length > 0) {
+      return NextResponse.json({ error: 'This package is published and can no longer be edited' }, { status: 400 });
     }
   }
+
+  const nextDeadline = data.bidDeadline ? parseDateEndOfDay(data.bidDeadline) : tender.bidDeadline;
+  const nextDelivery = data.deliveryDeadline ? parseDateEndOfDay(data.deliveryDeadline) : tender.deliveryDeadline;
 
   const setFields: Record<string, unknown> = { updatedAt: new Date() };
   if (data.title) setFields.title = data.title;
@@ -138,6 +198,26 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   if (data.status) setFields.status = data.status;
   if (data.groupIds) setFields.groupIds = data.groupIds.map((gid) => new ObjectId(gid));
   if (data.clauses) setFields.clauses = normalizeTenderClauses(data.clauses);
+  if (data.boqItems) setFields.boqItems = normalizeBoqItems(data.boqItems);
+
+  const nextType = (data.type ?? tender.type) as typeof tender.type;
+  const nextBoqItems = data.boqItems ? normalizeBoqItems(data.boqItems) : (tender.boqItems ?? []);
+  const pendingDocs = (data.documents ?? []).map((doc) => ({ category: doc.category }));
+  const nextDocuments = [...(tender.documents ?? []), ...pendingDocs];
+  const typeChangedWhileLive = Boolean(data.type) && data.type !== tender.type && tender.status !== 'draft';
+  if (publishing || typeChangedWhileLive) {
+    const blockers = [
+      ...getPublishBlockers({
+        type: nextType,
+        documents: nextDocuments,
+        boqItems: nextBoqItems,
+      }),
+      ...getPublishDateIssues(nextDeadline, nextDelivery).blockers,
+    ];
+    if (blockers.length > 0) {
+      return NextResponse.json({ error: blockers[0], blockers }, { status: 400 });
+    }
+  }
 
   if (data.documents && data.documents.length > 0) {
     const newDocs = [];
@@ -149,7 +229,6 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         fileSize: stored.fileSize, createdAt: new Date(),
       });
     }
-    // Push new documents into existing array
     await tenders.updateOne({ _id: new ObjectId(id) }, { $push: { documents: { $each: newDocs } } });
   }
 
