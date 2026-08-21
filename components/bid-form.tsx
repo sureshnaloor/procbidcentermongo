@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, type ChangeEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Plus, Trash2, ArrowLeft, Eye } from "lucide-react";
+import { Loader2, Plus, Trash2, ArrowLeft, Eye, Download, Upload } from "lucide-react";
 import Link from "next/link";
 import { clauseKey } from "@/lib/clauses";
 import { wordsDiffer } from "@/lib/text-diff";
@@ -26,6 +26,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { OfferConfirmDialog, type OfferConfirmPayload } from "@/components/offer-confirm-dialog";
 import { hasRegisteredDsc } from "@/lib/dsc";
+import { downloadBoqFile, readFileAsDataUrl } from "@/lib/boq-browser";
 
 interface CustomField {
   label: string;
@@ -33,6 +34,7 @@ interface CustomField {
 }
 
 interface LineItem {
+  lineCode: string;
   description: string;
   quantity: string;
   originalQuantity: number | null;
@@ -49,6 +51,7 @@ interface LineItem {
 
 function emptyLine(): LineItem {
   return {
+    lineCode: "",
     description: "",
     quantity: "1",
     originalQuantity: null,
@@ -76,6 +79,7 @@ function lineFromStored(item: any): LineItem {
   const quantity = item.quantity != null ? String(item.quantity) : "";
   const changed = originalQuantity != null && Number(item.quantity) !== originalQuantity;
   return {
+    lineCode: item.lineCode || "",
     description: item.description || "",
     quantity,
     originalQuantity,
@@ -128,6 +132,7 @@ function buildPayload(tender: any, form: any, lineItems: LineItem[], clauseModes
       };
     }),
     lineItems: lineItems.filter((l) => l.description.trim()).map((l) => ({
+      lineCode: l.lineCode.trim() || undefined,
       description: l.description.trim(),
       quantity: parseAmount(l.quantity),
       originalQuantity: l.originalQuantity ?? undefined,
@@ -169,6 +174,7 @@ export function BidForm({ tender, bid, mode }: { tender: any; bid?: any; mode: "
   const [clauseBodies, setClauseBodies] = useState<Record<string, string>>({});
   const [boqSeeded, setBoqSeeded] = useState(mode !== "create");
   const [submitOpen, setSubmitOpen] = useState(false);
+  const [boqBusy, setBoqBusy] = useState(false);
 
   const { data: profile } = useQuery({
     queryKey: ["profile", "me"],
@@ -182,6 +188,7 @@ export function BidForm({ tender, bid, mode }: { tender: any; bid?: any; mode: "
       .filter((item: any) => item.description?.trim() && Number(item.quantity) > 0)
       .map((item: any) => ({
         ...emptyLine(),
+        lineCode: item.lineCode || "",
         description: item.description,
         quantity: String(item.quantity),
         originalQuantity: Number(item.quantity),
@@ -234,6 +241,71 @@ export function BidForm({ tender, bid, mode }: { tender: any; bid?: any; mode: "
       if (idx !== i) return l;
       return { ...l, customFields: l.customFields.map((field, fi) => fi === fieldIdx ? { ...field, ...patch } : field) };
     }));
+  }
+
+  async function downloadQuoteBoq() {
+    try {
+      setBoqBusy(true);
+      const filled = lineItems.some((l) => l.unitPrice.trim() || l.lineCode);
+      await downloadBoqFile(
+        `/api/tenders/${tenderId}/boq-file${filled || mode !== "create" ? "?filled=1" : ""}`,
+        `${tender.title || "quote"}-BOQ.xlsx`
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not download BOQ");
+    } finally {
+      setBoqBusy(false);
+    }
+  }
+
+  async function importFilledBoq(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    try {
+      setBoqBusy(true);
+      const fileBase64 = await readFileAsDataUrl(file);
+      const res = await fetch("/api/boq/parse", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "supplier", tenderId, fileName: file.name, fileBase64 }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Could not import BOQ");
+      const imported = Array.isArray(data.lineItems) ? data.lineItems : [];
+      const currentByCode = new Map(lineItems.filter((l) => l.lineCode.trim()).map((l) => [l.lineCode.trim().toUpperCase(), l]));
+      const currentByDesc = new Map(lineItems.map((l) => [l.description.trim().toLowerCase(), l]));
+      setLineItems(imported.map((item: any) => {
+        const existing = (item.lineCode && currentByCode.get(String(item.lineCode).toUpperCase()))
+          || currentByDesc.get(String(item.description || "").trim().toLowerCase());
+        const original = item.originalQuantity != null && Number.isFinite(Number(item.originalQuantity))
+          ? Number(item.originalQuantity)
+          : existing?.originalQuantity ?? null;
+        const quantity = Number(item.quantity) || 0;
+        const changed = original != null && quantity !== original;
+        return {
+          ...(existing ?? emptyLine()),
+          lineCode: item.lineCode || existing?.lineCode || "",
+          description: item.description || "",
+          quantity: String(quantity),
+          originalQuantity: original,
+          quantityUnlocked: original == null || changed,
+          quantityChangeReason: item.quantityChangeReason || "",
+          unit: item.unit || existing?.unit || "unit",
+          unitPrice: item.unitPrice != null && item.unitPrice !== "" ? String(item.unitPrice) : "",
+          notes: item.notes || "",
+          deliveryMode: item.deliveryMode || existing?.deliveryMode || "days",
+          deliveryValue: item.deliveryValue != null ? String(item.deliveryValue) : existing?.deliveryValue || "",
+        };
+      }));
+      setBoqSeeded(true);
+      toast.success(`Imported ${imported.length} line${imported.length === 1 ? "" : "s"} from ${file.name}`);
+      for (const warning of data.warnings ?? []) toast.message(warning);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not import BOQ");
+    } finally {
+      setBoqBusy(false);
+    }
   }
 
   const currency = form.currency.trim() || "USD";
@@ -336,9 +408,34 @@ export function BidForm({ tender, bid, mode }: { tender: any; bid?: any; mode: "
       </Card>
 
       <Card>
-        <CardHeader className="flex-row items-center justify-between">
-          <CardTitle className="text-base">Line Items</CardTitle>
-          <Button type="button" variant="outline" size="sm" onClick={addLine}><Plus className="h-4 w-4" /> Add Item</Button>
+        <CardHeader className="flex-row items-start justify-between gap-3 space-y-0">
+          <div>
+            <CardTitle className="text-base">Line Items</CardTitle>
+            <p className="text-xs text-muted-foreground mt-1">
+              Download the BOQ, fill quoted qty and unit price in Excel, then upload it here. You can still edit lines in this form.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2 shrink-0 justify-end">
+            <Button type="button" variant="outline" size="sm" onClick={downloadQuoteBoq} disabled={boqBusy} id="download-quote-boq-btn">
+              {boqBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+              Download BOQ
+            </Button>
+            <Label
+              htmlFor="quote-boq-upload"
+              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-input text-sm font-medium cursor-pointer hover:bg-accent"
+            >
+              <Upload className="h-4 w-4" />
+              Upload filled BOQ
+            </Label>
+            <input
+              id="quote-boq-upload"
+              type="file"
+              className="hidden"
+              accept=".xlsx,.xls,.csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
+              onChange={importFilledBoq}
+            />
+            <Button type="button" variant="outline" size="sm" onClick={addLine}><Plus className="h-4 w-4" /> Add Item</Button>
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           {boqSeeded && mode === "create" && (
@@ -355,7 +452,10 @@ export function BidForm({ tender, bid, mode }: { tender: any; bid?: any; mode: "
               <div key={i} className="rounded-lg border border-border p-3 space-y-3">
                 <div className="flex items-start justify-between gap-2">
                   <div className="space-y-1.5 flex-1 min-w-0">
-                    <Label htmlFor={`line-desc-${i}`}>Description</Label>
+                    <div className="flex items-center gap-2">
+                      <Label htmlFor={`line-desc-${i}`}>Description</Label>
+                      {line.lineCode ? <span className="text-[11px] font-mono text-muted-foreground">{line.lineCode}</span> : null}
+                    </div>
                     <Input id={`line-desc-${i}`} placeholder="Material or service" value={line.description} onChange={(e) => setLine(i, { description: e.target.value })} />
                   </div>
                   <Button type="button" variant="ghost" size="icon" className="mt-6 shrink-0" onClick={() => removeLine(i)} disabled={lineItems.length === 1}>

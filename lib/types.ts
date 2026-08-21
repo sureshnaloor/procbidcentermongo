@@ -95,6 +95,7 @@ export type TenderDocumentCategory = 'boq' | 'scope' | 'drawing' | 'terms' | 'ot
 export type ClauseKind = 'safety' | 'quality' | 'payment' | 'delivery' | 'compliance' | 'scope' | 'legal' | 'custom';
 
 export interface ITenderBoqItem {
+  lineCode?: string;
   description: string;
   quantity: number;
   unit: string;
@@ -180,6 +181,7 @@ export interface IBidCustomField {
 
 export interface IBidLineItem {
   _id?: ObjectId;
+  lineCode?: string;
   description: string;
   quantity: number;
   originalQuantity?: number;

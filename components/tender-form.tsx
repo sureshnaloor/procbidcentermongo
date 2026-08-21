@@ -6,7 +6,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
-import { Loader2, Trash2, FileText, Calendar, Upload, Plus, AlertCircle } from "lucide-react";
+import { Loader2, Trash2, FileText, Calendar, Upload, Plus, AlertCircle, Download } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,6 +35,7 @@ import {
 } from "@/lib/procurement";
 import type { TenderDocumentCategory, TenderType } from "@/lib/types";
 import { PublishConfirmDialog } from "@/components/publish-confirm-dialog";
+import { downloadBoqFile, readFileAsDataUrl } from "@/lib/boq-browser";
 
 interface TenderFormProps {
   mode: "create" | "edit";
@@ -50,6 +51,7 @@ interface SelectedFile {
 }
 
 interface BoqLine {
+  lineCode?: string;
   description: string;
   quantity: number;
   unit: string;
@@ -82,7 +84,8 @@ export function TenderForm({ mode, tender }: TenderFormProps) {
   const [clauses, setClauses] = useState<{ kind: string; slug?: string; templateId?: string; title: string; body: string; required: boolean; included: boolean }[]>([]);
   const [files, setFiles] = useState<SelectedFile[]>([]);
   const [fileCategory, setFileCategory] = useState<TenderDocumentCategory>(defaultDocumentCategory(DEFAULT_PROCUREMENT_TYPE));
-  const [boqItems, setBoqItems] = useState<BoqLine[]>([{ description: "", quantity: 1, unit: "unit" }]);
+  const [boqItems, setBoqItems] = useState<BoqLine[]>([{ lineCode: "BOQ-001", description: "", quantity: 1, unit: "unit" }]);
+  const [boqBusy, setBoqBusy] = useState(false);
   const [pendingType, setPendingType] = useState<TenderType | null>(null);
   const [saveIntent, setSaveIntent] = useState<"draft" | "publish">("draft");
   const [publishOpen, setPublishOpen] = useState(false);
@@ -128,6 +131,7 @@ export function TenderForm({ mode, tender }: TenderFormProps) {
       }
       if (Array.isArray(tender.boqItems) && tender.boqItems.length > 0) {
         setBoqItems(tender.boqItems.map((item: any) => ({
+          lineCode: item.lineCode || "",
           description: item.description || "",
           quantity: Number(item.quantity) || 1,
           unit: item.unit || "unit",
@@ -224,6 +228,63 @@ export function TenderForm({ mode, tender }: TenderFormProps) {
     setFiles((prev) => prev.filter((_, i) => i !== idx));
   };
 
+  const nextBoqCode = (items: BoqLine[]) => {
+    const nums = items
+      .map((item) => Number(String(item.lineCode || "").replace(/\D/g, "")))
+      .filter((n) => Number.isFinite(n) && n > 0);
+    return `BOQ-${String((nums.length ? Math.max(...nums) : 0) + 1).padStart(3, "0")}`;
+  };
+
+  const downloadBoqTemplate = async () => {
+    try {
+      setBoqBusy(true);
+      if (mode === "edit" && tender?._id) {
+        await downloadBoqFile(`/api/tenders/${tender._id}/boq-file`, "BOQ.xlsx");
+      } else {
+        await downloadBoqFile("/api/boq/template", "ProcBid-BOQ-template.xlsx");
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not download BOQ template");
+    } finally {
+      setBoqBusy(false);
+    }
+  };
+
+  const handleBoqUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    try {
+      setBoqBusy(true);
+      const fileBase64 = await readFileAsDataUrl(file);
+      const res = await fetch("/api/boq/parse", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "company", fileName: file.name, fileBase64 }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Could not parse BOQ");
+      const items = Array.isArray(data.items) ? data.items : [];
+      setBoqItems(items.length ? items : [{ lineCode: "BOQ-001", description: "", quantity: 1, unit: "unit" }]);
+      setFiles((prev) => [
+        ...prev.filter((f) => f.fileName !== file.name),
+        {
+          category: "boq",
+          fileName: file.name,
+          fileType: file.type || file.name.split(".").pop() || "",
+          fileBase64,
+          fileSize: file.size,
+        },
+      ]);
+      toast.success(`Loaded ${items.length} BOQ line${items.length === 1 ? "" : "s"} from ${file.name}`);
+      for (const warning of data.warnings ?? []) toast.message(warning);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not upload BOQ");
+    } finally {
+      setBoqBusy(false);
+    }
+  };
+
   const validBoqItems = boqItems.filter((item) => item.description.trim() && Number(item.quantity) > 0);
   const allDocuments = [
     ...(tender?.documents ?? []),
@@ -246,7 +307,8 @@ export function TenderForm({ mode, tender }: TenderFormProps) {
         status: intent === "publish" || !isDraft ? undefined : "draft",
         estimatedValue: form.estimatedValue ? parseFloat(form.estimatedValue) : undefined,
         clauses: clauses.filter((c) => c.included).map(({ kind, slug, title, body, required }) => ({ kind, slug, title, body, required })),
-        boqItems: validBoqItems.map((item) => ({
+        boqItems: validBoqItems.map((item, i) => ({
+          lineCode: item.lineCode?.trim() || `BOQ-${String(i + 1).padStart(3, "0")}`,
           description: item.description.trim(),
           quantity: Number(item.quantity),
           unit: item.unit.trim() || "unit",
@@ -553,23 +615,43 @@ export function TenderForm({ mode, tender }: TenderFormProps) {
                 </h3>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   {form.type === "rfq"
-                    ? "Add materials or services with quantities. An RFQ cannot be published until a BOQ is attached."
-                    : "Optional for tenders. Use this for defined material and service quantities in the package."}
+                    ? "Upload an Excel/CSV BOQ or add lines here. An RFQ cannot be published until a BOQ is attached."
+                    : "Optional for tenders. Upload Excel/CSV or type materials and service quantities."}
                 </p>
               </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="shrink-0"
-                onClick={() => setBoqItems((prev) => [...prev, { description: "", quantity: 1, unit: "unit" }])}
-              >
-                <Plus className="h-4 w-4" /> Add line
-              </Button>
+              <div className="flex flex-wrap gap-2 shrink-0 justify-end">
+                <Button type="button" variant="outline" size="sm" onClick={downloadBoqTemplate} disabled={boqBusy} id="download-boq-template-btn">
+                  {boqBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                  Download template
+                </Button>
+                <Label
+                  htmlFor="boq-file-upload"
+                  className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-input text-sm font-medium cursor-pointer hover:bg-accent"
+                >
+                  <Upload className="h-4 w-4" />
+                  Upload BOQ
+                </Label>
+                <input
+                  id="boq-file-upload"
+                  type="file"
+                  className="hidden"
+                  accept=".xlsx,.xls,.csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
+                  onChange={handleBoqUpload}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setBoqItems((prev) => [...prev, { lineCode: nextBoqCode(prev), description: "", quantity: 1, unit: "unit" }])}
+                >
+                  <Plus className="h-4 w-4" /> Add line
+                </Button>
+              </div>
             </div>
             <div className="space-y-2">
               <div className="hidden sm:grid grid-cols-12 gap-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground px-1">
-                <div className="col-span-7">Description</div>
+                <div className="col-span-2">Code</div>
+                <div className="col-span-5">Description</div>
                 <div className="col-span-2">Qty</div>
                 <div className="col-span-2">Unit</div>
                 <div className="col-span-1" />
@@ -577,7 +659,13 @@ export function TenderForm({ mode, tender }: TenderFormProps) {
               {boqItems.map((line, i) => (
                 <div key={i} className="grid grid-cols-12 gap-2 items-center">
                   <Input
-                    className="col-span-12 sm:col-span-7"
+                    className="col-span-4 sm:col-span-2 font-mono text-xs"
+                    placeholder="BOQ-001"
+                    value={line.lineCode || ""}
+                    onChange={(e) => setBoqItems((prev) => prev.map((item, idx) => idx === i ? { ...item, lineCode: e.target.value } : item))}
+                  />
+                  <Input
+                    className="col-span-12 sm:col-span-5"
                     placeholder="Material or service description"
                     value={line.description}
                     onChange={(e) => setBoqItems((prev) => prev.map((item, idx) => idx === i ? { ...item, description: e.target.value } : item))}
@@ -601,7 +689,7 @@ export function TenderForm({ mode, tender }: TenderFormProps) {
                       type="button"
                       variant="ghost"
                       size="icon"
-                      onClick={() => setBoqItems((prev) => prev.length === 1 ? [{ description: "", quantity: 1, unit: "unit" }] : prev.filter((_, idx) => idx !== i))}
+                      onClick={() => setBoqItems((prev) => prev.length === 1 ? [{ lineCode: "BOQ-001", description: "", quantity: 1, unit: "unit" }] : prev.filter((_, idx) => idx !== i))}
                     >
                       <Trash2 className="h-4 w-4 text-destructive/70" />
                     </Button>

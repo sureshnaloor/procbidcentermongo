@@ -39,7 +39,12 @@ export function chunkItems<T>(items: T[], size: number): T[][] {
   return chunks.length ? chunks : [[]];
 }
 
-export function findMatchingLine(lineItems: any[] | undefined, description: string) {
+export function findMatchingLine(lineItems: any[] | undefined, description: string, lineCode?: string) {
+  const code = lineCode?.trim().toUpperCase();
+  if (code) {
+    const byCode = (lineItems ?? []).find((item) => String(item.lineCode || '').trim().toUpperCase() === code);
+    if (byCode) return byCode;
+  }
   const key = normalizeLineKey(description);
   return (lineItems ?? []).find((item) => normalizeLineKey(item.description || '') === key) ?? null;
 }

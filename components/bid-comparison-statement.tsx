@@ -52,7 +52,8 @@ export function BidComparisonStatement({
   const extraKeys = [...new Set(extraRows.map((item: any) => item.description))];
   const lineRows = [
     ...boqItems.map((item: any) => ({
-      key: item.description,
+      key: item.lineCode || item.description,
+      lineCode: item.lineCode,
       description: item.description,
       originalQuantity: item.quantity,
       unit: item.unit,
@@ -64,6 +65,7 @@ export function BidComparisonStatement({
         const sample = extraRows.find((item: any) => item.description === description);
         return {
           key: description,
+          lineCode: sample?.lineCode,
           description,
           originalQuantity: sample?.originalQuantity ?? sample?.quantity,
           unit: sample?.unit || "",
@@ -144,7 +146,7 @@ export function BidComparisonStatement({
                         </div>
                       </td>
                       {set.map((bid) => {
-                        const line = findMatchingLine(bid.lineItems, row.description);
+                        const line = findMatchingLine(bid.lineItems, row.description, row.lineCode);
                         if (!line) {
                           return (
                             <td key={bid._id} className="border border-black/20 p-1.5 text-black/50">Not quoted</td>

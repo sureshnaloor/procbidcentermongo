@@ -27,6 +27,7 @@ export const bidLineCustomFieldInput = z.object({
 });
 
 export const bidLineItemInput = z.object({
+  lineCode: z.string().max(40).optional(),
   description: z.string(),
   quantity: z.number(),
   originalQuantity: z.number().optional(),
@@ -81,6 +82,7 @@ export function normalizeStoredLineItem(item: z.infer<typeof bidLineItemInput>) 
     : undefined;
   const changed = originalQuantity != null && item.quantity !== originalQuantity;
   return {
+    lineCode: item.lineCode?.trim() || undefined,
     description: item.description,
     quantity: item.quantity,
     originalQuantity,

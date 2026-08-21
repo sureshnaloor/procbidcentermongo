@@ -34,6 +34,7 @@ const tenderClauseInput = z.object({
 });
 
 const tenderBoqItemInput = z.object({
+  lineCode: z.string().max(40).optional(),
   description: z.string().min(1).max(500),
   quantity: z.number().positive(),
   unit: z.string().min(1).max(40),
@@ -42,7 +43,8 @@ const tenderBoqItemInput = z.object({
 });
 
 function normalizeBoqItems(items: z.infer<typeof tenderBoqItemInput>[]): ITenderBoqItem[] {
-  return items.map((item) => ({
+  return items.map((item, i) => ({
+    lineCode: item.lineCode?.trim() || `BOQ-${String(i + 1).padStart(3, '0')}`,
     description: item.description.trim(),
     quantity: item.quantity,
     unit: item.unit.trim(),

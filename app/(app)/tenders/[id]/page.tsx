@@ -10,11 +10,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Edit, Trash2, FileText, CalendarClock, MapPin, DollarSign, Users, Loader2, ExternalLink, Plus, AlertCircle, Copy, Pencil } from "lucide-react";
+import { Edit, Trash2, FileText, CalendarClock, MapPin, DollarSign, Users, Loader2, ExternalLink, Plus, AlertCircle, Copy, Pencil, Download } from "lucide-react";
 import { format } from "date-fns";
 import { documentCategoryLabel, getPublishDateIssues, PROCUREMENT_TYPES } from "@/lib/procurement";
 import { OfferThreadPanel, type ThreadVendorOption } from "@/components/offer-thread-panel";
 import { PublishConfirmDialog } from "@/components/publish-confirm-dialog";
+import { downloadBoqFile } from "@/lib/boq-browser";
 
 const STATUS_COLORS: Record<string, "default" | "secondary" | "destructive" | "outline" | "success" | "warning"> = {
   draft: "secondary", published: "success", closed: "outline", awarded: "default", cancelled: "destructive",
@@ -310,17 +311,41 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
         {tender.boqItems?.length > 0 && (
           <TabsContent value="boq" className="mt-4">
             <Card>
-              <CardHeader><CardTitle className="text-sm">Bill of Quantities</CardTitle></CardHeader>
+              <CardHeader className="flex-row items-start justify-between gap-3 space-y-0">
+                <CardTitle className="text-sm">Bill of Quantities</CardTitle>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  id="download-tender-boq-btn"
+                  onClick={async () => {
+                    try {
+                      const filled = Boolean(isVendor && tender.myBid?._id);
+                      await downloadBoqFile(
+                        `/api/tenders/${id}/boq-file${filled ? "?filled=1" : ""}`,
+                        `${tender.title || "BOQ"}.xlsx`
+                      );
+                    } catch (err) {
+                      toast.error(err instanceof Error ? err.message : "Could not download BOQ");
+                    }
+                  }}
+                >
+                  <Download className="h-4 w-4" />
+                  {isVendor ? "Download fillable BOQ" : "Download BOQ"}
+                </Button>
+              </CardHeader>
               <CardContent className="pt-0">
                 <div className="grid grid-cols-12 gap-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-                  <div className="col-span-7">Description</div>
+                  <div className="col-span-2">Code</div>
+                  <div className="col-span-5">Description</div>
                   <div className="col-span-2">Qty</div>
                   <div className="col-span-3">Unit</div>
                 </div>
                 <div className="space-y-2">
                   {tender.boqItems.map((item: any, i: number) => (
-                    <div key={i} className="grid grid-cols-12 gap-2 text-sm border-b border-border pb-2 last:border-0">
-                      <div className="col-span-7 text-foreground">{item.description}</div>
+                    <div key={item.lineCode || i} className="grid grid-cols-12 gap-2 text-sm border-b border-border pb-2 last:border-0">
+                      <div className="col-span-2 font-mono text-xs text-muted-foreground">{item.lineCode || `BOQ-${String(i + 1).padStart(3, "0")}`}</div>
+                      <div className="col-span-5 text-foreground">{item.description}</div>
                       <div className="col-span-2">{item.quantity}</div>
                       <div className="col-span-3 text-muted-foreground">{item.unit}</div>
                     </div>
