@@ -83,9 +83,11 @@ export default function BidsPage() {
   const isLoading = loadingProfile || loadingBids || (isCompany && loadingTenders);
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 animate-fade-in-up">
       <div>
-        <h1 className="text-2xl font-bold text-foreground">{isCompany ? "Bids received" : "Bids"}</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground font-[family-name:var(--font-heading)] text-gradient">
+          {isCompany ? "Bids received" : "Bids"}
+        </h1>
         {isCompany && (
           <p className="text-sm text-muted-foreground mt-1">Offers are grouped under each package you have issued.</p>
         )}
@@ -94,27 +96,29 @@ export default function BidsPage() {
         <div className="flex items-center justify-center py-16"><Loader2 className="animate-spin h-6 w-6 text-muted-foreground" /></div>
       ) : isCompany ? (
         packages.length === 0 ? (
-          <div className="text-center py-16">
-            <FileText className="h-10 w-10 text-muted-foreground/60 mx-auto mb-3" />
-            <p className="text-muted-foreground">No issued packages yet. Publish an RFQ, RFP, or tender to receive offers.</p>
-            <Link href="/tenders" className="text-sm text-primary hover:underline mt-2 block">Go to my tenders</Link>
+          <div className="text-center py-16 rounded-2xl border border-dashed border-border bg-muted/20">
+            <div className="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center mx-auto mb-4">
+              <FileText className="h-7 w-7 text-muted-foreground" />
+            </div>
+            <p className="text-muted-foreground font-medium">No issued packages yet. Publish an RFQ, RFP, or tender to receive offers.</p>
+            <Link href="/tenders" className="text-sm font-semibold text-primary hover:text-primary/80 link-underline mt-2 inline-block">Go to my tenders</Link>
           </div>
         ) : (
-          <div className="grid gap-5">
+          <div className="grid gap-5 stagger-children">
             {packages.map(({ tender, bids: nested }: { tender: any; bids: any[] }) => {
               const typeMeta = PROCUREMENT_TYPES[tender.type as keyof typeof PROCUREMENT_TYPES];
               return (
-                <Card key={tender._id} className="overflow-hidden">
+                <Card key={tender._id} className="overflow-hidden border-0 shadow-[var(--shadow-card)]">
                   <CardHeader className="pb-3 border-b border-border bg-muted/30">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2 mb-1">
                           <Badge variant="outline" className="text-[10px] uppercase">{typeMeta?.label ?? tender.type}</Badge>
                           <Badge variant={TENDER_STATUS_COLORS[tender.status] ?? "outline"}>{statusLabel(tender.status)}</Badge>
-                          <span className="text-xs text-muted-foreground">{nested.length} {nested.length === 1 ? "offer" : "offers"}</span>
+                          <span className="text-xs text-muted-foreground font-medium">{nested.length} {nested.length === 1 ? "offer" : "offers"}</span>
                         </div>
-                        <CardTitle className="text-base">
-                          <Link href={`/tenders/${tender._id}`} className="hover:text-primary">{tender.title}</Link>
+                        <CardTitle className="text-base font-[family-name:var(--font-heading)]">
+                          <Link href={`/tenders/${tender._id}`} className="hover:text-primary transition-colors">{tender.title}</Link>
                         </CardTitle>
                         {tender.bidDeadline && (
                           <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
@@ -148,24 +152,26 @@ export default function BidsPage() {
           </div>
         )
       ) : (bids as any[]).length === 0 ? (
-        <div className="text-center py-16">
-          <FileText className="h-10 w-10 text-muted-foreground/60 mx-auto mb-3" />
-          <p className="text-muted-foreground">
+        <div className="text-center py-16 rounded-2xl border border-dashed border-border bg-muted/20">
+          <div className="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center mx-auto mb-4">
+            <FileText className="h-7 w-7 text-muted-foreground" />
+          </div>
+          <p className="text-muted-foreground font-medium">
             {isVendor
               ? "No offers yet. Browse tenders and request to participate, then prepare your offer once approved."
               : "No offers yet."}
           </p>
-          <Link href="/tenders" className="text-sm text-primary hover:underline mt-2 block">Browse tenders</Link>
+          <Link href="/tenders" className="text-sm font-semibold text-primary hover:text-primary/80 link-underline mt-2 inline-block">Browse tenders</Link>
         </div>
       ) : (
-        <div className="grid gap-4">
+        <div className="grid gap-4 stagger-children">
           {(bids as any[]).map((b: any) => (
             <Link key={b._id} href={`/bids/${b._id}`}>
-              <Card className="hover:shadow-md transition-shadow cursor-pointer">
+              <Card className="card-3d hover:border-primary/30 cursor-pointer border-0">
                 <CardContent className="p-5">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
+                      <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                         <Badge variant={BID_STATUS_COLORS[b.status] ?? "outline"} className="shrink-0">{statusLabel(b.status)}</Badge>
                         {b.revisionRequest?.pendingApproval && !b.revisionRequest?.open && <Badge variant="warning">Request to revise</Badge>}
                         {b.revisionRequest?.open && <Badge variant="warning">Revision requested</Badge>}
@@ -182,7 +188,7 @@ export default function BidsPage() {
                       )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+                  <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground flex-wrap">
                     <span className="flex items-center gap-1"><Clock className="h-3 w-3" />Validity: {b.validityDays} days</span>
                     {receivedAt(b) && (
                       <span>{b.submittedAt ? "Submitted" : "Created"} {formatDistanceToNow(receivedAt(b)!, { addSuffix: true })}</span>
@@ -203,7 +209,7 @@ function CompanyBidCard({ bid }: { bid: any }) {
   const location = [bid.vendor?.city, bid.vendor?.country].filter(Boolean).join(", ");
   return (
     <Link href={`/bids/${bid._id}`} className="block">
-      <div className="rounded-lg border border-border bg-card hover:shadow-md transition-shadow p-4">
+      <div className="rounded-xl border border-border bg-card hover:shadow-md hover:border-primary/30 transition-all p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2 mb-1.5">

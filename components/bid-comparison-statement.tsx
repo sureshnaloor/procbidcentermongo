@@ -4,6 +4,7 @@ import { format } from "date-fns";
 import { ClauseDiffText } from "@/components/clause-diff";
 import { CLAUSE_KIND_LABELS, type ClauseKindConst } from "@/lib/constants";
 import { PROCUREMENT_TYPES } from "@/lib/procurement";
+import { bidCommercialBreakdown } from "@/lib/bid-line";
 import {
   chunkItems,
   clauseStatusLabel,
@@ -81,7 +82,7 @@ export function BidComparisonStatement({
   const remarks: any[] = data.remarks ?? [];
 
   return (
-    <article className={`comparison-statement comparison-statement-${paper} bg-white text-black p-4 sm:p-6 print:p-0 overflow-x-auto print:overflow-visible`}>
+    <article className={`comparison-statement comparison-statement-${paper} bg-card text-black p-4 sm:p-6 print:p-0 overflow-x-auto print:overflow-visible`}>
       {sets.map((set, setIdx) => (
         <section key={setIdx} className={`comparison-set ${setIdx > 0 ? "comparison-set-break" : ""}`}>
           <header className="border-b border-black/30 pb-3 mb-3">
@@ -99,6 +100,9 @@ export function BidComparisonStatement({
               {tender.estimatedValue != null && (
                 <div>Estimate: <span className="font-semibold">{money(tender.estimatedValue, currency)}</span></div>
               )}
+              {tender.incoterm && (
+                <div>Incoterm: <span className="font-semibold">{tender.incoterm}{tender.incotermPlace ? ` — ${tender.incotermPlace}` : ""}</span></div>
+              )}
               <div>Printed: <span className="font-semibold">{format(new Date(), "d MMM yyyy HH:mm")}</span></div>
             </div>
             {sets.length > 1 && (
@@ -112,6 +116,8 @@ export function BidComparisonStatement({
             <div><span className="text-black/60">Quoted ({data.participation?.quoted?.length ?? 0}):</span> {names(data.participation?.quoted ?? [])}</div>
             <div><span className="text-black/60">Did not quote ({data.participation?.notQuoted?.length ?? 0}):</span> {names(data.participation?.notQuoted ?? [])}</div>
             <div><span className="text-black/60">Rejected ({data.participation?.rejected?.length ?? 0}):</span> {names(data.participation?.rejected ?? [])}</div>
+            <div><span className="text-black/60">Offline invited ({data.participation?.offlineInvited?.length ?? 0}):</span> {names(data.participation?.offlineInvited ?? [])}</div>
+            <div><span className="text-black/60">Offline participated ({data.participation?.offlineParticipated?.length ?? 0}):</span> {names(data.participation?.offlineParticipated ?? [])}</div>
           </div>
 
           {set.length === 0 ? (
@@ -120,7 +126,7 @@ export function BidComparisonStatement({
             <>
               <table className="w-full border-collapse text-[10px] mb-4">
                 <thead>
-                  <tr className="bg-neutral-100">
+                  <tr className="bg-muted">
                     <th className="border border-black/20 p-1.5 text-left w-[22%]">Line item</th>
                     {set.map((bid) => (
                       <th key={bid._id} className="border border-black/20 p-1.5 text-left align-top">
@@ -170,7 +176,7 @@ export function BidComparisonStatement({
                       })}
                     </tr>
                   ))}
-                  <tr className="bg-neutral-50 font-semibold">
+                  <tr className="bg-muted font-semibold">
                     <td className="border border-black/20 p-1.5">Offer total</td>
                     {set.map((bid) => (
                       <td key={bid._id} className="border border-black/20 p-1.5">
@@ -178,6 +184,39 @@ export function BidComparisonStatement({
                       </td>
                     ))}
                   </tr>
+                  {(() => {
+                    const breakdowns = set.map((bid) => bidCommercialBreakdown(bid));
+                    const anyCommercial = breakdowns.some((b) => b && (b.discount > 0 || b.vat > 0 || b.chargesTotal > 0));
+                    if (!anyCommercial) return null;
+                    const row = (label: string, pick: (b: any) => number | null, sign = "") => (
+                      <tr>
+                        <td className="border border-black/20 p-1.5 text-black/70">{label}</td>
+                        {set.map((bid, i) => {
+                          const value = breakdowns[i] ? pick(breakdowns[i]) : null;
+                          return (
+                            <td key={bid._id} className="border border-black/20 p-1.5">
+                              {value ? `${sign}${money(Math.abs(value), bid.currency || currency)}` : "—"}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                    return (
+                      <>
+                        {row("Discount", (b) => (b.discount > 0 ? b.discount : null), "−")}
+                        {row("VAT / tax", (b) => (b.vat > 0 ? b.vat : null), "+")}
+                        {row("Other costs", (b) => (b.chargesTotal > 0 ? b.chargesTotal : null), "+")}
+                        <tr className="font-bold">
+                          <td className="border border-black/20 p-1.5">Effective total</td>
+                          {set.map((bid, i) => (
+                            <td key={bid._id} className="border border-black/20 p-1.5">
+                              {money(breakdowns[i]?.effective, bid.currency || currency)}
+                            </td>
+                          ))}
+                        </tr>
+                      </>
+                    );
+                  })()}
                 </tbody>
               </table>
 
@@ -187,7 +226,7 @@ export function BidComparisonStatement({
               ) : (
                 <table className="w-full border-collapse text-[10px] mb-4">
                   <thead>
-                    <tr className="bg-neutral-100">
+                    <tr className="bg-muted">
                       <th className="border border-black/20 p-1.5 text-left w-[22%]">Clause</th>
                       {set.map((bid) => (
                         <th key={bid._id} className="border border-black/20 p-1.5 text-left">{bid.vendor?.companyName}</th>
@@ -220,7 +259,7 @@ export function BidComparisonStatement({
               <h2 className="text-[11px] font-bold uppercase tracking-wide mb-1">Payment terms and supplier remarks</h2>
               <table className="w-full border-collapse text-[10px] mb-4">
                 <thead>
-                  <tr className="bg-neutral-100">
+                  <tr className="bg-muted">
                     <th className="border border-black/20 p-1.5 text-left w-[22%]">Item</th>
                     {set.map((bid) => (
                       <th key={bid._id} className="border border-black/20 p-1.5 text-left">{bid.vendor?.companyName}</th>

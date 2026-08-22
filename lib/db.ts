@@ -2,7 +2,8 @@ import { getDb } from './mongodb';
 import type {
   IUser, IProfile, IMaterialServiceType, IMaterialServiceGroup, IMaterialServiceItem,
   ITender, IBid, IBidHistory, IVendorQualification, IDocument, IMessage,
-  IMessageChannel, INotification, IContactSubmission, IClauseTemplate, ITenderInvite, IVendorBlacklist
+  IMessageChannel, INotification, IContactSubmission, IClauseTemplate, ITenderInvite, IVendorBlacklist,
+  IOfflineInvite
 } from './types';
 
 export async function collections() {
@@ -19,6 +20,7 @@ export async function collections() {
     vendorQualifications: db.collection<IVendorQualification>('vendorQualifications'),
     tenderInvites: db.collection<ITenderInvite>('tenderInvites'),
     vendorBlacklist: db.collection<IVendorBlacklist>('vendorBlacklist'),
+    offlineInvites: db.collection<IOfflineInvite>('offlineInvites'),
     clauseTemplates: db.collection<IClauseTemplate>('clauseTemplates'),
     documents: db.collection<IDocument>('documents'),
     messages: db.collection<IMessage>('messages'),
@@ -59,6 +61,8 @@ export async function ensureIndexes() {
   await cols.tenderInvites.createIndex({ accessToken: 1 }, { unique: true, sparse: true });
   await cols.vendorBlacklist.createIndex({ companyProfileId: 1, vendorProfileId: 1 }, { unique: true });
   await cols.vendorBlacklist.createIndex({ vendorProfileId: 1 });
+  await cols.offlineInvites.createIndex({ tenderId: 1 });
+  await cols.offlineInvites.createIndex({ tenderId: 1, email: 1 });
   await cols.clauseTemplates.createIndex({ kind: 1, isSystem: 1 }, { unique: true, partialFilterExpression: { isSystem: true } });
   try {
     await cols.clauseTemplates.dropIndex('companyProfileId_1_kind_1');

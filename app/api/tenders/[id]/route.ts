@@ -7,6 +7,7 @@ import { saveTenderDocumentFile } from '@/lib/tender-files';
 import { normalizeTenderClauses } from '@/lib/clauses';
 import { DOCUMENT_CATEGORY_VALUES, getPublishBlockers, getPublishDateIssues } from '@/lib/procurement';
 import { ensureInviteAccessToken, isVendorBlacklisted } from '@/lib/offer-link';
+import { INCOTERM_CODES } from '@/lib/incoterms';
 import type { ITenderBoqItem } from '@/lib/types';
 
 function parseDateEndOfDay(value: string): Date {
@@ -148,6 +149,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     deliveryDeadline: z.string().optional(),
     estimatedValue: z.number().optional(),
     currency: z.string().optional(),
+    incoterm: z.enum(INCOTERM_CODES).nullable().optional(),
+    incotermPlace: z.string().max(200).optional(),
     location: z.string().optional(),
     requirements: z.string().optional(),
     termsConditions: z.string().optional(),
@@ -194,6 +197,12 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   if (data.deliveryDeadline) setFields.deliveryDeadline = parseDateEndOfDay(data.deliveryDeadline);
   if (data.estimatedValue !== undefined) setFields.estimatedValue = data.estimatedValue;
   if (data.currency) setFields.currency = data.currency;
+  if (data.incoterm !== undefined) {
+    setFields.incoterm = data.incoterm ?? undefined;
+    setFields.incotermPlace = data.incoterm ? data.incotermPlace : undefined;
+  } else if (data.incotermPlace !== undefined) {
+    setFields.incotermPlace = data.incotermPlace;
+  }
   if (data.location !== undefined) setFields.location = data.location;
   if (data.requirements !== undefined) setFields.requirements = data.requirements;
   if (data.termsConditions !== undefined) setFields.termsConditions = data.termsConditions;

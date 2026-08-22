@@ -67,10 +67,12 @@ export default function TendersPage() {
   const tenders = data?.items ?? [];
 
   return (
-    <div className="space-y-5">
-      <div className="flex items-center justify-between gap-3">
+    <div className="space-y-5 animate-fade-in-up">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Tenders</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground font-[family-name:var(--font-heading)] text-gradient">
+            Tenders
+          </h1>
           {isVendor && (
             <p className="text-sm text-muted-foreground mt-1">
               {vendorMine
@@ -78,57 +80,64 @@ export default function TendersPage() {
                 : "All published packages you can request to join."}
             </p>
           )}
+          {!isVendor && <p className="text-sm text-muted-foreground mt-1">Create, publish, and manage your RFQs, RFPs, and tenders.</p>}
         </div>
-        {isCompany && (
-          <Link href="/tenders/new">
-            <Button size="sm" id="new-tender-top-btn"><Plus /> New Tender</Button>
-          </Link>
-        )}
-        {isVendor && (
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setBrowseAll((v) => !v)}
-            id="toggle-vendor-tenders-btn"
-          >
-            {browseAll ? "My packages" : "Browse all published"}
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {isCompany && (
+            <Link href="/tenders/new">
+              <Button size="sm" id="new-tender-top-btn"><Plus /> New Tender</Button>
+            </Link>
+          )}
+          {isVendor && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setBrowseAll((v) => !v)}
+              id="toggle-vendor-tenders-btn"
+            >
+              {browseAll ? "My packages" : "Browse all published"}
+            </Button>
+          )}
+        </div>
       </div>
 
-      <div className="flex flex-wrap gap-3">
-        <div className="relative flex-1 min-w-48">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Search tenders..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" id="tender-search" />
-        </div>
-        <Select value={status || "all"} onValueChange={(v) => setStatus(v === "all" ? "" : v)}>
-          <SelectTrigger className="w-36" id="tender-status-filter"><SelectValue placeholder="Status" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All statuses</SelectItem>
-            {!isVendor && <SelectItem value="draft">Draft</SelectItem>}
-            <SelectItem value="published">Published</SelectItem>
-            <SelectItem value="closed">Closed</SelectItem>
-            <SelectItem value="awarded">Awarded</SelectItem>
-            <SelectItem value="cancelled">Cancelled</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={type || "all"} onValueChange={(v) => setType(v === "all" ? "" : v)}>
-          <SelectTrigger className="w-32" id="tender-type-filter"><SelectValue placeholder="Type" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All types</SelectItem>
-            <SelectItem value="rfp">RFP</SelectItem>
-            <SelectItem value="rfq">RFQ</SelectItem>
-            <SelectItem value="tender">Tender</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+      <Card className="glass border-0 p-1">
+        <CardContent className="p-3 flex flex-wrap gap-3">
+          <div className="relative flex-1 min-w-48">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input placeholder="Search tenders..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" id="tender-search" />
+          </div>
+          <Select value={status || "all"} onValueChange={(v) => setStatus(v === "all" ? "" : v)}>
+            <SelectTrigger className="w-36" id="tender-status-filter"><SelectValue placeholder="Status" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All statuses</SelectItem>
+              {!isVendor && <SelectItem value="draft">Draft</SelectItem>}
+              <SelectItem value="published">Published</SelectItem>
+              <SelectItem value="closed">Closed</SelectItem>
+              <SelectItem value="awarded">Awarded</SelectItem>
+              <SelectItem value="cancelled">Cancelled</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={type || "all"} onValueChange={(v) => setType(v === "all" ? "" : v)}>
+            <SelectTrigger className="w-32" id="tender-type-filter"><SelectValue placeholder="Type" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All types</SelectItem>
+              <SelectItem value="rfp">RFP</SelectItem>
+              <SelectItem value="rfq">RFQ</SelectItem>
+              <SelectItem value="tender">Tender</SelectItem>
+            </SelectContent>
+          </Select>
+        </CardContent>
+      </Card>
 
       {isLoading || loadingProfile ? (
         <div className="flex items-center justify-center py-16"><Loader2 className="animate-spin h-6 w-6 text-muted-foreground" /></div>
       ) : tenders.length === 0 ? (
-        <div className="text-center py-16">
-          <FileText className="h-10 w-10 text-muted-foreground/60 mx-auto mb-3" />
-          <p className="text-muted-foreground">
+        <div className="text-center py-16 rounded-2xl border border-dashed border-border bg-muted/20">
+          <div className="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center mx-auto mb-4">
+            <FileText className="h-7 w-7 text-muted-foreground" />
+          </div>
+          <p className="text-muted-foreground font-medium">
             {isVendor && vendorMine
               ? "No invited or approved packages yet."
               : isVendor
@@ -143,7 +152,7 @@ export default function TendersPage() {
           )}
         </div>
       ) : (
-        <div className="grid gap-4">
+        <div className="grid gap-4 stagger-children">
           {tenders.map((t: any) => (
             isVendor ? <VendorTenderCard key={t._id} tender={t} /> : <CompanyTenderCard key={t._id} tender={t} />
           ))}
@@ -156,12 +165,12 @@ export default function TendersPage() {
 function CompanyTenderCard({ tender: t }: { tender: any }) {
   return (
     <Link href={`/tenders/${t._id}`}>
-      <Card className="hover:shadow-md transition-shadow cursor-pointer group">
+      <Card className="card-3d hover:border-primary/30 cursor-pointer group border-0">
         <CardContent className="p-5">
           <div className="flex items-start justify-between gap-3">
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1">
-                <Badge variant="outline" className="text-xs uppercase shrink-0">
+              <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                <Badge variant="outline" className="text-[10px] uppercase shrink-0">
                   {PROCUREMENT_TYPES[t.type as keyof typeof PROCUREMENT_TYPES]?.label ?? t.type}
                 </Badge>
                 <Badge variant={STATUS_COLORS[t.status] ?? "outline"} className="shrink-0">{t.status}</Badge>
@@ -175,7 +184,7 @@ function CompanyTenderCard({ tender: t }: { tender: any }) {
               )}
             </div>
           </div>
-          <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground">
+          <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground flex-wrap">
             {t.location && <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{t.location}</span>}
             {t.bidDeadline && <span className="flex items-center gap-1"><CalendarClock className="h-3 w-3" />Deadline: {new Date(t.bidDeadline).toLocaleDateString()}</span>}
             <span>Posted {formatDistanceToNow(new Date(t.createdAt), { addSuffix: true })}</span>
@@ -196,12 +205,12 @@ function VendorTenderCard({ tender: t }: { tender: any }) {
   const deadlineOpen = !t.bidDeadline || new Date(t.bidDeadline).getTime() >= Date.now();
 
   return (
-    <Card>
+    <Card className="card-3d hover:border-primary/30 border-0">
       <CardContent className="p-5 space-y-3">
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1 flex-wrap">
-              <Badge variant="outline" className="text-xs uppercase shrink-0">
+            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+              <Badge variant="outline" className="text-[10px] uppercase shrink-0">
                 {PROCUREMENT_TYPES[t.type as keyof typeof PROCUREMENT_TYPES]?.label ?? t.type}
               </Badge>
               <Badge variant={STATUS_COLORS[t.status] ?? "outline"} className="shrink-0">{t.status}</Badge>
@@ -246,7 +255,7 @@ function VendorTenderCard({ tender: t }: { tender: any }) {
         {submitted.length > 0 && (
           <div className="space-y-2 pt-1">
             {submitted.map((bid: any) => (
-              <div key={bid._id} className="rounded-lg border border-border bg-muted/30 hover:bg-muted/50 p-3">
+              <div key={bid._id} className="rounded-xl border border-border bg-muted/30 hover:bg-muted/50 transition-colors p-3">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <Link href={`/bids/${bid._id}`} className="block">
@@ -272,7 +281,7 @@ function VendorTenderCard({ tender: t }: { tender: any }) {
                     )}
                   </div>
                   {bid.totalPrice != null && (
-                    <Link href={`/bids/${bid._id}`} className="text-sm font-semibold flex items-center gap-0.5 shrink-0">
+                    <Link href={`/bids/${bid._id}`} className="text-sm font-semibold flex items-center gap-0.5 shrink-0 hover:text-primary">
                       <DollarSign className="h-3.5 w-3.5" />
                       {bid.currency} {Number(bid.totalPrice).toLocaleString()}
                     </Link>

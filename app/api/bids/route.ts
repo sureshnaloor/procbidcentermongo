@@ -56,7 +56,16 @@ export async function GET() {
   return NextResponse.json(rows.map((b) => ({
     ...b,
     totalPrice: resolvedBidTotal(b),
-    vendor: vendorById.get(b.vendorProfileId.toString()) ?? null,
+    vendor: vendorById.get(b.vendorProfileId.toString())
+      ?? (b.isOffline && b.offlineSupplier
+        ? {
+            companyName: b.offlineSupplier.name,
+            contactPerson: b.offlineSupplier.contactPerson,
+            phone: b.offlineSupplier.phone,
+            city: b.offlineSupplier.city,
+            country: b.offlineSupplier.country,
+          }
+        : null),
     tender: tenderById.get(b.tenderId.toString()) ?? null,
   })));
 }
@@ -73,6 +82,14 @@ export async function POST(req: NextRequest) {
     totalPrice: z.number().optional(),
     currency: z.string().default('USD'),
     validityDays: z.number().default(90),
+    discountType: z.enum(['percent', 'amount']).nullable().optional(),
+    discountValue: z.number().min(0).nullable().optional(),
+    vatPercent: z.number().min(0).max(100).nullable().optional(),
+    otherCharges: z.array(z.object({
+      label: z.string().min(1).max(80),
+      type: z.enum(['value', 'percent']).optional(),
+      amount: z.number().min(0),
+    })).max(12).optional(),
     technicalProposal: z.string().optional(),
     commercialProposal: z.string().optional(),
     notes: z.string().optional(),
@@ -113,6 +130,10 @@ export async function POST(req: NextRequest) {
     totalPrice: storedLines.length > 0 ? lineItemsTotal(storedLines) : data.totalPrice,
     currency: data.currency,
     validityDays: data.validityDays,
+    discountType: data.discountType ?? undefined,
+    discountValue: data.discountValue ?? undefined,
+    vatPercent: data.vatPercent ?? undefined,
+    otherCharges: data.otherCharges,
     technicalProposal: data.technicalProposal,
     commercialProposal: data.commercialProposal,
     notes: data.notes,

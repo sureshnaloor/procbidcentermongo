@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { ClauseDiffText } from "@/components/clause-diff";
 import { clauseKey } from "@/lib/clauses";
 import { wordsDiffer } from "@/lib/text-diff";
-import { formatDelivery } from "@/lib/bid-line";
+import { formatDelivery, bidCommercialBreakdown, hasCommercialTerms } from "@/lib/bid-line";
 
 function money(value: number | undefined | null, currency: string) {
   if (value == null || Number.isNaN(Number(value))) return "—";
@@ -17,9 +17,10 @@ export function BidPreviewDocument({ bid }: { bid: any }) {
   const vendorName = bid.vendor?.companyName || "Supplier";
   const tenderTitle = bid.tender?.title || "Offer";
   const signed = bid.signature;
+  const commercial = bidCommercialBreakdown(bid);
 
   return (
-    <article className="bid-print-document bg-white text-black p-8 max-w-4xl mx-auto print:p-0 print:max-w-none">
+    <article className="bid-print-document bg-card text-black p-8 max-w-4xl mx-auto print:p-0 print:max-w-none">
       <header className="border-b border-black/20 pb-4 mb-6">
         <p className="text-xs uppercase tracking-wide text-black/60">Offer document</p>
         <h1 className="text-2xl font-bold mt-1">{tenderTitle}</h1>
@@ -43,6 +44,39 @@ export function BidPreviewDocument({ bid }: { bid: any }) {
           </tbody>
         </table>
       </section>
+
+      {hasCommercialTerms(bid) && commercial && (
+        <section className="mb-6">
+          <h2 className="text-sm font-semibold uppercase tracking-wide mb-2">Commercial breakdown</h2>
+          <table className="w-full text-sm border-collapse">
+            <tbody>
+              <tr><td className="py-1 pr-4 text-black/60 w-40">Offer value</td><td className="py-1 font-semibold">{money(commercial.gross, currency)}</td></tr>
+              {commercial.discount > 0 && (
+                <tr>
+                  <td className="py-1 pr-4 text-black/60">Discount{bid.discountType === "percent" ? ` (${bid.discountValue}%)` : ""}</td>
+                  <td className="py-1">−{money(commercial.discount, currency)}</td>
+                </tr>
+              )}
+              {commercial.vat > 0 && (
+                <tr><td className="py-1 pr-4 text-black/60">VAT / tax ({bid.vatPercent}%)</td><td className="py-1">+{money(commercial.vat, currency)}</td></tr>
+              )}
+              {(bid.otherCharges ?? []).filter((c: any) => Number(c.amount) > 0).map((c: any, i: number) => {
+                const value = c.type === 'percent' ? commercial.taxable * (Number(c.amount) / 100) : Number(c.amount);
+                return (
+                  <tr key={i}>
+                    <td className="py-1 pr-4 text-black/60">{c.label}{c.type === 'percent' ? ` (${c.amount}%)` : ''}</td>
+                    <td className="py-1">+{money(value, currency)}</td>
+                  </tr>
+                );
+              })}
+              <tr className="font-semibold border-t border-black/20">
+                <td className="py-1 pr-4 text-black/60">Effective total</td>
+                <td className="py-1">{money(commercial.effective, currency)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+      )}
 
       {bid.lineItems?.length > 0 && (
         <section className="mb-6">

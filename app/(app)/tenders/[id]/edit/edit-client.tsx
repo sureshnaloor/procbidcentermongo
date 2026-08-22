@@ -24,8 +24,8 @@ export function EditTenderClient({ id }: { id: string }) {
   }
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
-      <h1 className="text-2xl font-bold text-foreground">Edit Tender</h1>
+    <div className="max-w-3xl mx-auto space-y-6 animate-fade-in-up">
+      <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground font-[family-name:var(--font-heading)] text-gradient">Edit Tender</h1>
       <TenderForm mode="edit" tender={tender} />
     </div>
   );

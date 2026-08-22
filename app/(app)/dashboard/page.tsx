@@ -55,13 +55,16 @@ export default function DashboardPage() {
       ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between">
+    <div className="space-y-6 animate-fade-in-up relative">
+      {/* soft ambient top glow */}
+      <div className="pointer-events-none absolute -top-6 left-0 right-0 h-40 bg-gradient-to-b from-primary/[0.06] to-transparent rounded-3xl" />
+
+      <div className="relative flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground font-[family-name:var(--font-heading)] text-gradient">
             Good {getGreeting()}, {user?.displayName?.split(" ")[0] || "there"}
           </h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
+          <p className="text-sm text-muted-foreground mt-1">
             {isAdmin ? "Super Admin" : isCompany ? "EPC Company Dashboard" : isVendor ? "Supplier Dashboard" : "Welcome"}
           </p>
         </div>
@@ -75,19 +78,19 @@ export default function DashboardPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 stagger-children">
         {stats.map((stat) => (
           <Link key={stat.label} href={stat.href}>
-            <Card className="hover:shadow-md transition-shadow cursor-pointer group">
+            <Card className="glass card-3d cursor-pointer group border-0">
               <CardContent className="p-5">
                 <div className="flex items-center justify-between mb-3">
-                  <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center">
+                  <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
                     <stat.icon className="h-5 w-5 text-primary" />
                   </div>
                   <ChevronRight className="h-4 w-4 text-muted-foreground/40 group-hover:text-primary transition-colors" />
                 </div>
-                <div className="text-2xl font-bold text-foreground">{stat.value}</div>
-                <div className="text-xs text-muted-foreground mt-0.5">{stat.label}</div>
+                <div className="text-3xl font-bold text-foreground font-[family-name:var(--font-heading)]">{stat.value}</div>
+                <div className="text-xs font-medium text-muted-foreground mt-0.5">{stat.label}</div>
               </CardContent>
             </Card>
           </Link>
@@ -96,17 +99,17 @@ export default function DashboardPage() {
 
       {/* Recent Tenders */}
       {tenders.length > 0 && (
-        <Card>
-          <CardHeader className="pb-3 flex-row items-center justify-between">
-            <CardTitle className="text-base">Recent Tenders</CardTitle>
-            <Link href="/tenders" className="text-sm text-primary hover:underline font-medium">View all</Link>
+        <Card className="overflow-hidden border-0 shadow-[var(--shadow-card)]">
+          <CardHeader className="pb-3 flex-row items-center justify-between bg-muted/30 border-b border-border">
+            <CardTitle className="text-base font-[family-name:var(--font-heading)]">Recent Tenders</CardTitle>
+            <Link href="/tenders" className="text-sm font-semibold text-primary hover:text-primary/80 link-underline">View all</Link>
           </CardHeader>
           <CardContent className="p-0">
             <div className="divide-y divide-border">
               {tenders.map((t: any) => (
-                <Link key={t._id} href={`/tenders/${t._id}`} className="flex items-center justify-between px-6 py-3 hover:bg-accent transition-colors">
-                  <div>
-                    <div className="font-medium text-sm text-foreground">{t.title}</div>
+                <Link key={t._id} href={`/tenders/${t._id}`} className="flex items-center justify-between px-6 py-3.5 hover:bg-muted/40 transition-colors group">
+                  <div className="min-w-0">
+                    <div className="font-semibold text-sm text-foreground group-hover:text-primary transition-colors truncate">{t.title}</div>
                     <div className="text-xs text-muted-foreground mt-0.5">{t.type?.toUpperCase()} · {t.currency}</div>
                   </div>
                   <TenderStatusBadge status={t.status} />
@@ -119,16 +122,16 @@ export default function DashboardPage() {
 
       {/* Recent Notifications */}
       {notifications.length > 0 && (
-        <Card>
-          <CardHeader className="pb-3 flex-row items-center justify-between">
-            <CardTitle className="text-base">Recent Notifications</CardTitle>
-            <span className="text-xs text-muted-foreground">{notifications.filter((n: any) => !n.isRead).length} unread</span>
+        <Card className="overflow-hidden border-0 shadow-[var(--shadow-card)]">
+          <CardHeader className="pb-3 flex-row items-center justify-between bg-muted/30 border-b border-border">
+            <CardTitle className="text-base font-[family-name:var(--font-heading)]">Recent Notifications</CardTitle>
+            <span className="text-xs font-medium text-muted-foreground">{notifications.filter((n: any) => !n.isRead).length} unread</span>
           </CardHeader>
           <CardContent className="p-0">
             <div className="divide-y divide-border">
               {notifications.slice(0, 5).map((n: any) => (
-                <div key={n._id} className={`px-6 py-3 ${!n.isRead ? "bg-primary/5" : ""}`}>
-                  <div className="font-medium text-sm text-foreground">{n.title}</div>
+                <div key={n._id} className={`px-6 py-3.5 ${!n.isRead ? "bg-primary/[0.04]" : ""}`}>
+                  <div className="font-semibold text-sm text-foreground">{n.title}</div>
                   {n.content && <div className="text-xs text-muted-foreground mt-0.5">{n.content}</div>}
                 </div>
               ))}

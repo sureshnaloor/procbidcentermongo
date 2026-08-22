@@ -145,6 +145,8 @@ export interface ITender {
   deliveryDeadline?: Date;
   estimatedValue?: number;
   currency: string;
+  incoterm?: string;
+  incotermPlace?: string;
   location?: string;
   requirements?: string;
   termsConditions?: string;
@@ -197,11 +199,51 @@ export interface IBidLineItem {
   customFields?: IBidCustomField[];
 }
 
+export interface IOfflineSupplier {
+  name: string;
+  email?: string;
+  contactPerson?: string;
+  phone?: string;
+  city?: string;
+  country?: string;
+}
+
+export type OfflineInviteStatus = 'pending' | 'approved';
+
+export interface IOfflineInvite {
+  _id?: ObjectId;
+  tenderId: ObjectId;
+  companyProfileId: ObjectId;
+  supplierName: string;
+  email: string;
+  status: OfflineInviteStatus;
+  note?: string;
+  createdBy: string;
+  approvedBy?: string;
+  approvedAt?: Date;
+  createdAt: Date;
+}
+
+export type DiscountType = 'percent' | 'amount';
+
+export interface IBidCharge {
+  label: string;
+  type?: 'value' | 'percent';
+  amount: number;
+}
+
 export interface IBid {
   _id?: ObjectId;
   tenderId: ObjectId;
   vendorProfileId: ObjectId;
   status: BidStatus;
+  isOffline?: boolean;
+  offlineSupplier?: IOfflineSupplier;
+  offlineWorkbook?: IBidSignedOffer;
+  discountType?: DiscountType;
+  discountValue?: number;
+  vatPercent?: number;
+  otherCharges?: IBidCharge[];
   totalPrice?: number;
   currency: string;
   validityDays: number;
@@ -253,6 +295,10 @@ export interface IBidRevisionDraft {
   technicalProposal?: string;
   commercialProposal?: string;
   notes?: string;
+  discountType?: DiscountType;
+  discountValue?: number;
+  vatPercent?: number;
+  otherCharges?: IBidCharge[];
   lineItems?: IBidLineItem[];
   clauseResponses?: IBidClauseResponse[];
   savedAt: Date;
@@ -272,6 +318,10 @@ export interface IBidVersionSnapshot {
   technicalProposal?: string;
   commercialProposal?: string;
   notes?: string;
+  discountType?: DiscountType;
+  discountValue?: number;
+  vatPercent?: number;
+  otherCharges?: IBidCharge[];
   lineItems: IBidLineItem[];
   clauseResponses?: IBidClauseResponse[];
   submittedAt?: Date;

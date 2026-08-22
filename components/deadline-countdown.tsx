@@ -18,7 +18,7 @@ export function DeadlineCountdown({ deadline }: { deadline: string | Date }) {
   if (Number.isNaN(end)) return null;
   const ms = end - now;
   if (ms <= 0) {
-    return <span className="text-destructive font-medium">Deadline passed</span>;
+    return <span className="text-destructive font-medium tabular-nums">Deadline passed</span>;
   }
 
   const days = Math.floor(ms / 86_400_000);

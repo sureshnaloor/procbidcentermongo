@@ -35,12 +35,16 @@ export default function CompanyPublicPage({ params }: { params: Promise<{ id: st
   const docs = company.publicDocuments ?? [];
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
+    <div className="max-w-3xl mx-auto space-y-6 animate-fade-in-up">
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <Building2 className="h-5 w-5 text-primary" />
-            <h1 className="text-2xl font-bold text-foreground">{company.companyName || "Company"}</h1>
+            <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center">
+              <Building2 className="h-5 w-5 text-primary" />
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground font-[family-name:var(--font-heading)] text-gradient">
+              {company.companyName || "Company"}
+            </h1>
             {company.isVerified && <Badge variant="success" className="flex items-center gap-1"><Shield className="h-3 w-3" />Verified</Badge>}
           </div>
           <p className="text-sm text-muted-foreground">{company.industry || "EPC Company"}</p>
@@ -52,7 +56,7 @@ export default function CompanyPublicPage({ params }: { params: Promise<{ id: st
         )}
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 stagger-children">
         {company.employeeCount != null && (
           <Stat label="Employees" value={company.employeeCount.toLocaleString()} icon={Users} />
         )}
@@ -68,10 +72,10 @@ export default function CompanyPublicPage({ params }: { params: Promise<{ id: st
         )}
       </div>
 
-      <Card>
-        <CardHeader><CardTitle className="text-sm">Company information</CardTitle></CardHeader>
+      <Card className="glass card-3d border-0">
+        <CardHeader><CardTitle className="text-sm font-[family-name:var(--font-heading)]">Company information</CardTitle></CardHeader>
         <CardContent className="space-y-3 text-sm">
-          {company.description && <p className="text-foreground dark:text-muted-foreground whitespace-pre-wrap">{company.description}</p>}
+          {company.description && <p className="text-foreground whitespace-pre-wrap">{company.description}</p>}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-muted-foreground">
             {company.registrationNumber && <div>Registration: {company.registrationNumber}</div>}
             {company.taxId && <div>Tax / GST: {company.taxId}</div>}
@@ -79,7 +83,7 @@ export default function CompanyPublicPage({ params }: { params: Promise<{ id: st
             {company.phone && <div className="flex items-center gap-1"><Phone className="h-3.5 w-3.5" />{company.phone}</div>}
             {company.address && <div className="md:col-span-2">{company.address}</div>}
             {company.website && (
-              <a href={company.website.startsWith("http") ? company.website : `https://${company.website}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-primary hover:underline">
+              <a href={company.website.startsWith("http") ? company.website : `https://${company.website}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-primary hover:text-primary/80 link-underline">
                 <Globe className="h-3.5 w-3.5" />{company.website}
               </a>
             )}
@@ -87,21 +91,21 @@ export default function CompanyPublicPage({ params }: { params: Promise<{ id: st
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader><CardTitle className="text-sm">Public documents</CardTitle></CardHeader>
+      <Card className="glass card-3d border-0">
+        <CardHeader><CardTitle className="text-sm font-[family-name:var(--font-heading)]">Public documents</CardTitle></CardHeader>
         <CardContent>
           {docs.length === 0 ? (
             <p className="text-sm text-muted-foreground">No public documents shared yet.</p>
           ) : (
             <div className="grid gap-2">
               {docs.map((d: any) => (
-                <a key={d._id} href={d.fileUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 rounded-lg border border-border p-3 hover:bg-accent">
+                <a key={d._id} href={d.fileUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 rounded-xl border border-border p-3 hover:bg-muted/40 transition-colors group">
                   <FileText className="h-4 w-4 text-primary shrink-0" />
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium truncate">{d.name}</div>
+                    <div className="text-sm font-medium truncate group-hover:text-primary transition-colors">{d.name}</div>
                     <div className="text-xs text-muted-foreground">{categoryLabel(d.category)}</div>
                   </div>
-                  <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
+                  <ExternalLink className="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary transition-colors" />
                 </a>
               ))}
             </div>
@@ -114,12 +118,12 @@ export default function CompanyPublicPage({ params }: { params: Promise<{ id: st
 
 function Stat({ label, value, icon: Icon }: { label: string; value: string; icon?: React.ElementType }) {
   return (
-    <div className="rounded-lg border border-border p-3">
-      <div className="flex items-center gap-1.5 mb-1 text-xs text-muted-foreground">
+    <div className="rounded-2xl border border-border bg-card p-3 shadow-[var(--shadow-card)] hover:border-primary/20 transition-colors">
+      <div className="flex items-center gap-1.5 mb-1 text-xs font-bold text-muted-foreground uppercase tracking-wider">
         {Icon && <Icon className="h-3.5 w-3.5" />}
         {label}
       </div>
-      <div className="font-semibold text-sm">{value}</div>
+      <div className="font-semibold text-sm text-foreground">{value}</div>
     </div>
   );
 }

@@ -379,9 +379,9 @@ function SettingsClient() {
   }
 
   const vendorProfileForm = (
-    <Card>
+    <Card className="glass card-3d border-0">
       <CardHeader>
-        <CardTitle className="text-base">Supplier profile</CardTitle>
+        <CardTitle className="text-base font-[family-name:var(--font-heading)]">Supplier profile</CardTitle>
         <p className="text-xs text-muted-foreground">Add or update the details EPC companies see when they contact you.</p>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -465,9 +465,9 @@ function SettingsClient() {
   );
 
   const vendorDscForm = (
-    <Card>
+    <Card className="glass card-3d border-0">
       <CardHeader>
-        <CardTitle className="text-base">Digital signature certificate (DSC)</CardTitle>
+        <CardTitle className="text-base font-[family-name:var(--font-heading)]">Digital signature certificate (DSC)</CardTitle>
         <p className="text-xs text-muted-foreground">
           If you have a Class 2/3 DSC, register it here. Submitting an offer will then require you to digitally sign it.
           Browser USB-token signing is not available; print the offer, sign it with your DSC software if required, and attach the signed PDF at submit.
@@ -513,9 +513,9 @@ function SettingsClient() {
   );
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
+    <div className="max-w-3xl mx-auto space-y-6 animate-fade-in-up">
       <div>
-        <h1 className="text-2xl font-bold text-foreground">Settings</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground font-[family-name:var(--font-heading)] text-gradient">Settings</h1>
         {isCompany && (
           <p className="text-sm text-muted-foreground mt-1">Company details and documents on this page are public to all suppliers.</p>
         )}
@@ -533,8 +533,8 @@ function SettingsClient() {
         </TabsList>
 
         <TabsContent value="account" className="mt-4">
-          <Card>
-            <CardHeader><CardTitle className="text-base">Account</CardTitle></CardHeader>
+          <Card className="glass card-3d border-0">
+            <CardHeader><CardTitle className="text-base font-[family-name:var(--font-heading)]">Account</CardTitle></CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-primary/10 dark:bg-primary/20 flex items-center justify-center">
@@ -559,9 +559,9 @@ function SettingsClient() {
           {isVendor && vendorProfileForm}
           {isVendor && vendorDscForm}
           {isCompany && profile && (
-          <Card>
+          <Card className="glass card-3d border-0">
             <CardHeader>
-              <CardTitle className="text-base">Public company profile</CardTitle>
+              <CardTitle className="text-base font-[family-name:var(--font-heading)]">Public company profile</CardTitle>
               <p className="text-xs text-muted-foreground">Visible to all suppliers on your company page and tenders.</p>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -647,9 +647,9 @@ function SettingsClient() {
 
         { (isCompany || isVendor) && (
           <TabsContent value="documents" className="mt-4">
-          <Card>
+          <Card className="glass card-3d border-0">
             <CardHeader>
-              <CardTitle className="text-base">Public documents</CardTitle>
+              <CardTitle className="text-base font-[family-name:var(--font-heading)]">Public documents</CardTitle>
               <p className="text-xs text-muted-foreground">
                 {isVendor
                   ? "Certificates, registrations, and similar files are visible to companies reviewing your profile. Max 20MB per file."
@@ -671,7 +671,7 @@ function SettingsClient() {
                 </div>
                 <Label
                   htmlFor="public-doc-upload"
-                  className="flex items-center justify-center gap-1.5 px-4 py-2 border border-input dark:border-border rounded-lg cursor-pointer hover:bg-accent text-sm font-medium"
+                  className="flex items-center justify-center gap-1.5 px-4 py-2 border border-input rounded-lg cursor-pointer hover:bg-accent text-sm font-medium"
                 >
                   {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
                   Upload file
@@ -708,9 +708,9 @@ function SettingsClient() {
 
         {isCompany && (
           <TabsContent value="terms" className="mt-4">
-          <Card>
+          <Card className="glass card-3d border-0">
             <CardHeader>
-              <CardTitle className="text-base">Company terms library</CardTitle>
+              <CardTitle className="text-base font-[family-name:var(--font-heading)]">Company terms library</CardTitle>
               <p className="text-xs text-muted-foreground">Pre-prepared, editable templates attached to new tenders. Seeded terms can be customized; your own custom terms stay private to this company and cannot be copied by other EPCs.</p>
             </CardHeader>
             <CardContent className="space-y-5">
@@ -738,7 +738,7 @@ function SettingsClient() {
 
               <div className="pt-2 space-y-4">
                 <div>
-                  <h4 className="text-sm font-semibold text-foreground dark:text-muted-foreground">Your custom terms</h4>
+                  <h4 className="text-sm font-semibold text-foreground">Your custom terms</h4>
                   <p className="text-xs text-muted-foreground mt-0.5">These belong only to your company. Other EPC companies cannot view or copy them.</p>
                 </div>
                 {(templateData?.custom ?? []).map((t: any) => {
@@ -770,7 +770,7 @@ function SettingsClient() {
                     </div>
                   );
                 })}
-                <div className="space-y-2 rounded-lg border border-dashed border-input dark:border-border p-3">
+                <div className="space-y-2 rounded-lg border border-dashed border-input p-3">
                   <Label>Add a custom term</Label>
                   <Input
                     placeholder="Title, e.g. Warranty, Insurance, Local content"

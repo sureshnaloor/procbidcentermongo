@@ -99,7 +99,7 @@ export default function ComparisonStatementPage({ params }: { params: Promise<{ 
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 animate-fade-in-up">
       <style>{`@page { size: ${paper === "a3" ? "A3" : "A4"} landscape; margin: 10mm; }`}</style>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 print:hidden">
         <div className="flex items-center gap-3">
@@ -107,7 +107,7 @@ export default function ComparisonStatementPage({ params }: { params: Promise<{ 
             <Button variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button>
           </Link>
           <div>
-            <h1 className="text-xl font-bold">Comparison statement</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground font-[family-name:var(--font-heading)] text-gradient">Comparison statement</h1>
             <p className="text-sm text-muted-foreground">{data.tender.title}</p>
           </div>
         </div>
@@ -154,9 +154,9 @@ export default function ComparisonStatementPage({ params }: { params: Promise<{ 
 
       <BidComparisonStatement data={{ ...data, bids: displayBids }} paper={paper} />
 
-      <Card className="print:hidden">
+      <Card className="print:hidden glass card-3d border-0 rounded-2xl">
         <CardHeader>
-          <CardTitle className="text-base">Add company remarks</CardTitle>
+          <CardTitle className="text-base font-[family-name:var(--font-heading)]">Add company remarks</CardTitle>
           <p className="text-xs text-muted-foreground">
             Up to {MAX_COMPARISON_REMARKS} levels. Each entry stores the reviewer&apos;s name, designation, and remarks.
           </p>

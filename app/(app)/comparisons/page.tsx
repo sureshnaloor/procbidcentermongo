@@ -47,24 +47,26 @@ export default function ComparisonsPage() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 animate-fade-in-up">
       <div>
-        <h1 className="text-2xl font-bold text-foreground">Comparison of bids</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-foreground font-[family-name:var(--font-heading)]">Comparison of bids</h1>
         <p className="text-sm text-muted-foreground mt-1">
           Open a comparison statement for any issued package. Most recent packages are listed first.
         </p>
       </div>
       {items.length === 0 ? (
         <div className="text-center py-16">
-          <Scale className="h-10 w-10 text-muted-foreground/60 mx-auto mb-3" />
+          <div className="mx-auto mb-3 inline-flex items-center justify-center h-12 w-12 rounded-full bg-muted">
+            <Scale className="h-6 w-6 text-muted-foreground" />
+          </div>
           <p className="text-muted-foreground">No issued RFQs, RFPs, or tenders yet.</p>
         </div>
       ) : (
-        <div className="grid gap-3">
+        <div className="grid gap-3 stagger-children">
           {items.map((tender: any) => {
             const typeMeta = PROCUREMENT_TYPES[tender.type as keyof typeof PROCUREMENT_TYPES];
             return (
-              <Card key={tender._id}>
+              <Card key={tender._id} className="bg-card border border-border rounded-2xl shadow-[var(--shadow-card)] transition-all duration-200">
                 <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center gap-3">
                   <div className="flex-1 min-w-0">
                     <div className="flex flex-wrap items-center gap-2 mb-1">

@@ -90,9 +90,9 @@ export function OfferThreadPanel({
 
   return (
     <aside className="w-full lg:w-80 xl:w-96 shrink-0 lg:sticky lg:top-4 self-start print:hidden">
-      <div className="rounded-xl border border-border bg-card flex flex-col h-[min(70vh,36rem)]">
+      <div className="rounded-2xl border border-border bg-card flex flex-col h-[min(70vh,36rem)] shadow-[var(--shadow-card)]">
         <div className="px-4 py-3 border-b border-border">
-          <div className="text-sm font-semibold text-foreground">Message trail</div>
+          <div className="text-sm font-bold text-foreground font-[family-name:var(--font-heading)]">Message trail</div>
           <p className="text-xs text-muted-foreground mt-0.5">
             Private to this company and supplier. Not visible to other users.
           </p>
@@ -130,10 +130,10 @@ export function OfferThreadPanel({
             if (msg.isSystem) {
               return (
                 <div key={msg._id} className="px-1 py-1">
-                  <p className="text-xs text-center text-teal-700 dark:text-teal-400 whitespace-pre-wrap">
+                  <p className="text-xs text-center text-primary whitespace-pre-wrap">
                     {msg.content}
                   </p>
-                  <p className="text-[10px] text-center text-teal-700/70 dark:text-teal-400/70 mt-0.5">
+                  <p className="text-[10px] text-center text-primary/70 mt-0.5">
                     {msg.createdAt ? formatDistanceToNow(new Date(msg.createdAt), { addSuffix: true }) : ""}
                   </p>
                 </div>

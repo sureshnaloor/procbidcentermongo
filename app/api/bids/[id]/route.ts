@@ -27,7 +27,16 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   if (!isAdmin && isCompanyOwner && bid.status === 'draft') return NextResponse.json(null);
 
   const history = await bidHistory.find({ bidId: bid._id! }).sort({ createdAt: -1 }).toArray();
-  const vendor = await profiles.findOne({ _id: bid.vendorProfileId });
+  const vendorProfile = await profiles.findOne({ _id: bid.vendorProfileId });
+  const vendor = vendorProfile ?? (bid.isOffline && bid.offlineSupplier
+    ? {
+        companyName: bid.offlineSupplier.name,
+        contactPerson: bid.offlineSupplier.contactPerson,
+        phone: bid.offlineSupplier.phone,
+        city: bid.offlineSupplier.city,
+        country: bid.offlineSupplier.country,
+      }
+    : null);
   const company = tender ? await profiles.findOne({ _id: tender.companyProfileId }) : null;
   const deadlineOpen = !tender?.bidDeadline || tender.bidDeadline.getTime() >= Date.now();
   const revisionOpen = Boolean(bid.revisionRequest?.open);
@@ -114,6 +123,14 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     totalPrice: z.number().optional(),
     currency: z.string().optional(),
     validityDays: z.number().optional(),
+    discountType: z.enum(['percent', 'amount']).nullable().optional(),
+    discountValue: z.number().min(0).nullable().optional(),
+    vatPercent: z.number().min(0).max(100).nullable().optional(),
+    otherCharges: z.array(z.object({
+      label: z.string().min(1).max(80),
+      type: z.enum(['value', 'percent']).optional(),
+      amount: z.number().min(0),
+    })).max(12).optional(),
     technicalProposal: z.string().optional(),
     commercialProposal: z.string().optional(),
     notes: z.string().optional(),
@@ -140,6 +157,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       $set: {
         revisionDraft: {
           ...rest,
+          discountType: rest.discountType ?? undefined,
+          discountValue: rest.discountValue ?? undefined,
+          vatPercent: rest.vatPercent ?? undefined,
           totalPrice: (nextLines?.length ?? 0) > 0 ? fromLines : totalPrice,
           clauseResponses,
           lineItems: nextLines,

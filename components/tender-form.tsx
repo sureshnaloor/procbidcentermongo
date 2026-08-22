@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import {
   AlertDialog,
@@ -34,6 +34,7 @@ import {
   getPublishDateIssues,
 } from "@/lib/procurement";
 import type { TenderDocumentCategory, TenderType } from "@/lib/types";
+import { INCOTERMS } from "@/lib/incoterms";
 import { PublishConfirmDialog } from "@/components/publish-confirm-dialog";
 import { downloadBoqFile, readFileAsDataUrl } from "@/lib/boq-browser";
 
@@ -75,6 +76,8 @@ export function TenderForm({ mode, tender }: TenderFormProps) {
     deliveryDeadline: "",
     estimatedValue: "",
     currency: "USD",
+    incoterm: "",
+    incotermPlace: "",
     location: "",
     requirements: "",
     termsConditions: "",
@@ -120,6 +123,8 @@ export function TenderForm({ mode, tender }: TenderFormProps) {
         deliveryDeadline: tender.deliveryDeadline ? new Date(tender.deliveryDeadline).toISOString().split("T")[0] : "",
         estimatedValue: tender.estimatedValue !== undefined ? String(tender.estimatedValue) : "",
         currency: tender.currency || "USD",
+        incoterm: tender.incoterm || "",
+        incotermPlace: tender.incotermPlace || "",
         location: tender.location || "",
         requirements: tender.requirements || "",
         termsConditions: tender.termsConditions || "",
@@ -306,6 +311,8 @@ export function TenderForm({ mode, tender }: TenderFormProps) {
         ...form,
         status: intent === "publish" || !isDraft ? undefined : "draft",
         estimatedValue: form.estimatedValue ? parseFloat(form.estimatedValue) : undefined,
+        incoterm: form.incoterm ? form.incoterm : (mode === "edit" ? null : undefined),
+        incotermPlace: form.incoterm ? form.incotermPlace.trim() || undefined : undefined,
         clauses: clauses.filter((c) => c.included).map(({ kind, slug, title, body, required }) => ({ kind, slug, title, body, required })),
         boqItems: validBoqItems.map((item, i) => ({
           lineCode: item.lineCode?.trim() || `BOQ-${String(i + 1).padStart(3, "0")}`,
@@ -407,8 +414,8 @@ export function TenderForm({ mode, tender }: TenderFormProps) {
   }, [form.type]);
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6" id="tender-form">
-      <Card>
+    <form onSubmit={handleSubmit} className="space-y-6 animate-fade-in-up" id="tender-form">
+      <Card className="glass border-0">
         <CardContent className="pt-6 space-y-4">
           <div className="space-y-1.5">
             <Label htmlFor="tender-title">{typeMeta.label} Title</Label>
@@ -468,9 +475,9 @@ export function TenderForm({ mode, tender }: TenderFormProps) {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="glass border-0">
         <CardContent className="pt-6 space-y-4">
-          <h3 className="font-semibold text-sm text-foreground dark:text-muted-foreground">Deadlines & Value</h3>
+          <h3 className="font-semibold text-sm text-foreground">Deadlines & Value</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label htmlFor="bid-deadline" className="flex items-center gap-1.5">
@@ -523,13 +530,56 @@ export function TenderForm({ mode, tender }: TenderFormProps) {
               />
             </div>
           </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="incoterm">Incoterm (2020)</Label>
+              <Select value={form.incoterm} onValueChange={(v) => setField("incoterm", v === "none" ? "" : v)}>
+                <SelectTrigger id="incoterm">
+                  <SelectValue placeholder="Not specified" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Not specified</SelectItem>
+                  <SelectGroup>
+                    <SelectLabel>Any mode of transport</SelectLabel>
+                    {INCOTERMS.filter((t) => t.transport === "any").map((t) => (
+                      <SelectItem key={t.code} value={t.code}>{t.code} — {t.name}</SelectItem>
+                    ))}
+                  </SelectGroup>
+                  <SelectGroup>
+                    <SelectLabel>Sea & inland waterway</SelectLabel>
+                    {INCOTERMS.filter((t) => t.transport === "sea").map((t) => (
+                      <SelectItem key={t.code} value={t.code}>{t.code} — {t.name}</SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+              {form.incoterm && (
+                <p className="text-[11px] text-muted-foreground">{INCOTERMS.find((t) => t.code === form.incoterm)?.hint}</p>
+              )}
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="incoterm-place">Named place / port</Label>
+              <Input
+                id="incoterm-place"
+                value={form.incotermPlace}
+                onChange={(e) => setField("incotermPlace", e.target.value)}
+                placeholder={form.incoterm ? "e.g. Jebel Ali Port" : "Choose an incoterm first"}
+                disabled={!form.incoterm}
+              />
+              {form.incoterm && !form.incotermPlace.trim() && (
+                <p className="text-[11px] text-amber-600 dark:text-amber-400">Add the named port or place for {form.incoterm}.</p>
+              )}
+            </div>
+          </div>
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="glass border-0">
         <CardContent className="pt-6 space-y-4">
           <div>
-            <h3 className="font-semibold text-sm text-foreground dark:text-muted-foreground">Material & Service Groups</h3>
+            <h3 className="font-semibold text-sm text-foreground">Material & Service Groups</h3>
             <p className="text-xs text-muted-foreground mt-0.5">Select at least one group relevant to this package</p>
           </div>
 
@@ -539,7 +589,7 @@ export function TenderForm({ mode, tender }: TenderFormProps) {
               <span className="text-xs text-muted-foreground">Loading master data categories...</span>
             </div>
           ) : !hasGroups ? (
-            <div className="rounded-lg border border-dashed border-input dark:border-border p-4 text-sm text-muted-foreground">
+            <div className="rounded-lg border border-dashed border-input p-4 text-sm text-muted-foreground">
               No material or service groups are configured yet.
               {isAdmin ? (
                 <Link href="/admin/masters" className="ml-1 text-primary hover:underline">
@@ -565,7 +615,7 @@ export function TenderForm({ mode, tender }: TenderFormProps) {
                           className={`text-xs px-2.5 py-1 rounded-full border transition-all ${
                             isSelected
                               ? "bg-primary border-primary text-primary-foreground"
-                              : "bg-card border-input text-foreground hover:bg-accent dark:bg-card dark:border-border dark:text-muted-foreground"
+                              : "bg-card border-input text-foreground hover:bg-accent"
                           }`}
                         >
                           {g.name}
@@ -589,7 +639,7 @@ export function TenderForm({ mode, tender }: TenderFormProps) {
                           className={`text-xs px-2.5 py-1 rounded-full border transition-all ${
                             isSelected
                               ? "bg-primary border-primary text-primary-foreground"
-                              : "bg-card border-input text-foreground hover:bg-accent dark:bg-card dark:border-border dark:text-muted-foreground"
+                              : "bg-card border-input text-foreground hover:bg-accent"
                           }`}
                         >
                           {g.name}
@@ -605,11 +655,11 @@ export function TenderForm({ mode, tender }: TenderFormProps) {
       </Card>
 
       {showBoqEditor && (
-        <Card>
+        <Card className="glass border-0">
           <CardContent className="pt-6 space-y-4">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h3 className="font-semibold text-sm text-foreground dark:text-muted-foreground">
+                <h3 className="font-semibold text-sm text-foreground">
                   Bill of Quantities
                   {form.type === "rfq" ? <span className="text-destructive ml-1">*</span> : null}
                 </h3>
@@ -701,11 +751,11 @@ export function TenderForm({ mode, tender }: TenderFormProps) {
         </Card>
       )}
 
-      <Card>
+      <Card className="glass border-0">
         <CardContent className="pt-6 space-y-4">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <h3 className="font-semibold text-sm text-foreground dark:text-muted-foreground">Standard Terms (editable templates)</h3>
+              <h3 className="font-semibold text-sm text-foreground">Standard Terms (editable templates)</h3>
               <p className="text-xs text-muted-foreground mt-0.5">Seeded terms plus your company&apos;s private custom terms. Custom terms stay in your library and cannot be copied by other EPC companies.</p>
             </div>
             <Button
@@ -825,10 +875,10 @@ export function TenderForm({ mode, tender }: TenderFormProps) {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="glass border-0">
         <CardContent className="pt-6 space-y-4">
           <div>
-            <h3 className="font-semibold text-sm text-foreground dark:text-muted-foreground">Attachments</h3>
+            <h3 className="font-semibold text-sm text-foreground">Attachments</h3>
             <p className="text-xs text-muted-foreground mt-0.5">{requiredCategoryHint} Max 20MB per file.</p>
           </div>
 
@@ -837,7 +887,7 @@ export function TenderForm({ mode, tender }: TenderFormProps) {
               <Label className="text-xs font-semibold text-muted-foreground">Existing Documents</Label>
               <div className="grid gap-2">
                 {tender.documents.map((d: any) => (
-                  <div key={d.storedName} className="flex items-center gap-2 text-xs p-2 rounded bg-accent dark:bg-card border border-border">
+                  <div key={d.storedName} className="flex items-center gap-2 text-xs p-2 rounded bg-accent border border-border">
                     <FileText className="h-4 w-4 text-primary shrink-0" />
                     <span className="flex-1 truncate">{d.name}</span>
                     <Badge variant="outline" className="text-[10px]">{d.category}</Badge>
@@ -867,7 +917,7 @@ export function TenderForm({ mode, tender }: TenderFormProps) {
             <div className="w-full sm:w-auto">
               <Label
                 htmlFor="file-upload"
-                className="flex items-center gap-1.5 justify-center px-4 py-2 border border-input dark:border-border rounded-lg cursor-pointer hover:bg-accent transition-colors text-sm font-medium text-foreground dark:text-muted-foreground"
+                className="flex items-center gap-1.5 justify-center px-4 py-2 border border-input rounded-lg cursor-pointer hover:bg-accent transition-colors text-sm font-medium text-foreground"
               >
                 <Upload className="h-4 w-4" />
                 Choose File
@@ -908,8 +958,8 @@ export function TenderForm({ mode, tender }: TenderFormProps) {
       </Card>
 
       {isDraft && allPublishBlockers.length > 0 && (
-        <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-foreground">
-          <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+        <div className="flex items-start gap-2 rounded-lg border border-primary/30 bg-primary/10 p-3 text-sm text-foreground">
+          <AlertCircle className="h-4 w-4 text-primary mt-0.5 shrink-0" />
           <div>
             <div className="font-medium">Not ready to publish</div>
             <p className="text-muted-foreground mt-0.5">{allPublishBlockers[0]} You can still save a draft.</p>

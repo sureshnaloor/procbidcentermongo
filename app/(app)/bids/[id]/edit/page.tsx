@@ -33,10 +33,10 @@ export default function EditBidPage({ params }: { params: Promise<{ id: string }
     router.replace(`/bids/${id}`);
   }, [bid, profile, router, id, canEditDraft, canRevise]);
 
-  if (isLoading) return <div className="flex items-center justify-center py-16"><Loader2 className="animate-spin h-6 w-6 text-muted-foreground" /></div>;
-  if (!bid || !bid.tender) return <div className="text-center py-16 text-muted-foreground" />;
+  if (isLoading) return <div className="flex items-center justify-center py-16 animate-fade-in-up"><Loader2 className="animate-spin h-6 w-6 text-muted-foreground" /></div>;
+  if (!bid || !bid.tender) return <div className="text-center py-16 text-muted-foreground animate-fade-in-up" />;
   if (!canEditDraft && !canRevise) {
-    return <div className="flex items-center justify-center py-16"><Loader2 className="animate-spin h-6 w-6 text-muted-foreground" /></div>;
+    return <div className="flex items-center justify-center py-16 animate-fade-in-up"><Loader2 className="animate-spin h-6 w-6 text-muted-foreground" /></div>;
   }
 
   return <BidForm mode={canRevise ? "revise" : "edit"} tender={bid.tender} bid={bid} />;

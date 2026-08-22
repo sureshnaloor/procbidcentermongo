@@ -20,6 +20,10 @@ export function commercialFields(bid: Pick<
   | 'technicalProposal'
   | 'commercialProposal'
   | 'notes'
+  | 'discountType'
+  | 'discountValue'
+  | 'vatPercent'
+  | 'otherCharges'
   | 'lineItems'
   | 'clauseResponses'
   | 'status'
@@ -32,6 +36,10 @@ export function commercialFields(bid: Pick<
     technicalProposal: bid.technicalProposal,
     commercialProposal: bid.commercialProposal,
     notes: bid.notes,
+    discountType: bid.discountType,
+    discountValue: bid.discountValue,
+    vatPercent: bid.vatPercent,
+    otherCharges: bid.otherCharges,
     lineItems: bid.lineItems ?? [],
     clauseResponses: bid.clauseResponses ?? [],
     status: bid.status,
@@ -85,6 +93,10 @@ export function applyRevisionDraft(bid: IBid, draft?: IBidRevisionDraft | null):
     technicalProposal: draft.technicalProposal ?? bid.technicalProposal,
     commercialProposal: draft.commercialProposal ?? bid.commercialProposal,
     notes: draft.notes ?? bid.notes,
+    discountType: draft.discountType ?? bid.discountType,
+    discountValue: draft.discountValue ?? bid.discountValue,
+    vatPercent: draft.vatPercent ?? bid.vatPercent,
+    otherCharges: draft.otherCharges ?? bid.otherCharges,
     lineItems,
     clauseResponses: draft.clauseResponses ?? bid.clauseResponses,
   };

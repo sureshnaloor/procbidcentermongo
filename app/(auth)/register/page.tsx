@@ -67,15 +67,19 @@ export default function RegisterPage() {
   }
 
   return (
-    <Card className="shadow-xl border-0 ring-1 ring-border">
-      <CardHeader className="pb-4">
-        <CardTitle className="text-2xl font-bold">Create account</CardTitle>
-        <CardDescription>Join ProSource as an EPC company or supplier</CardDescription>
+    <Card className="glass card-3d border-0 shadow-2xl animate-fade-in-up max-w-lg mx-auto">
+      <CardHeader className="pb-2 text-center">
+        <CardTitle className="text-3xl font-bold tracking-tight text-gradient">
+          Create account
+        </CardTitle>
+        <CardDescription className="text-muted-foreground/90">
+          Join ProSource as an EPC company or supplier
+        </CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4" id="register-form">
+        <form onSubmit={handleSubmit} className="space-y-5" id="register-form">
           {error && (
-            <div className="rounded-lg bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
+            <div className="rounded-xl bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
               {error}
             </div>
           )}
@@ -131,15 +135,15 @@ export default function RegisterPage() {
             </div>
           </div>
 
-          <Button type="submit" className="w-full" disabled={loading} id="register-submit-btn">
+          <Button type="submit" className="w-full h-11 text-base" disabled={loading} id="register-submit-btn">
             {loading ? <><Loader2 className="animate-spin" /> Creating account...</> : "Create account"}
           </Button>
         </form>
       </CardContent>
       <CardFooter className="justify-center pb-6">
-        <p className="text-sm text-gray-500">
+        <p className="text-sm text-muted-foreground">
           Already have an account?{" "}
-          <Link href="/login" className="font-medium text-primary hover:text-primary/80 hover:underline">
+          <Link href="/login" className="font-semibold text-primary hover:text-primary/80 link-underline">
             Sign in
           </Link>
         </p>

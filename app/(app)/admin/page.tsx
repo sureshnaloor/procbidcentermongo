@@ -51,11 +51,13 @@ export default function AdminPage() {
   });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-in-up">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Admin Panel</h1>
-          {adminInfo?.isSuperAdmin && <p className="text-sm text-amber-600">Super Admin</p>}
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground font-[family-name:var(--font-heading)] text-gradient">
+            Admin Panel
+          </h1>
+          {adminInfo?.isSuperAdmin && <p className="text-sm font-semibold text-primary mt-0.5">Super Admin</p>}
         </div>
         <div className="flex gap-2">
           <Link href="/admin/masters"><Button variant="outline" size="sm" id="master-data-btn"><Settings className="h-4 w-4" />Global Masters</Button></Link>
@@ -63,7 +65,7 @@ export default function AdminPage() {
       </div>
 
       <Tabs defaultValue="users">
-        <TabsList>
+        <TabsList className="glass border-0">
           <TabsTrigger value="users">Business Users ({(users as any[]).length})</TabsTrigger>
           {adminInfo?.isSuperAdmin && <TabsTrigger value="admins">Admins ({(admins as any[]).length})</TabsTrigger>}
         </TabsList>
@@ -72,17 +74,17 @@ export default function AdminPage() {
           {isLoading ? (
             <div className="flex items-center justify-center py-16"><Loader2 className="animate-spin h-6 w-6 text-muted-foreground" /></div>
           ) : (
-            <div className="grid gap-3">
+            <div className="grid gap-3 stagger-children">
               {(users as any[]).map((u: any) => (
-                <Card key={u._id}>
+                <Card key={u._id} className="border-0 shadow-[var(--shadow-card)] hover:border-primary/30 transition-all">
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-full bg-muted dark:bg-card flex items-center justify-center">
+                        <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">
                           <Building2 className="h-4 w-4 text-muted-foreground" />
                         </div>
                         <div>
-                          <div className="font-medium text-sm">{u.companyName || u.user?.username}</div>
+                          <div className="font-semibold text-sm text-foreground">{u.companyName || u.user?.username}</div>
                           <div className="text-xs text-muted-foreground">{u.user?.email} · {u.userType === "company" ? "EPC Company" : "Supplier"}</div>
                         </div>
                       </div>
@@ -108,17 +110,17 @@ export default function AdminPage() {
 
         {adminInfo?.isSuperAdmin && (
           <TabsContent value="admins" className="mt-4">
-            <div className="grid gap-3">
+            <div className="grid gap-3 stagger-children">
               {(admins as any[]).map((a: any) => (
-                <Card key={a.id}>
+                <Card key={a.id} className="border-0 shadow-[var(--shadow-card)] hover:border-primary/30 transition-all">
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
-                          <Shield className="h-4 w-4 text-amber-600" />
+                        <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                          <Shield className="h-4 w-4 text-primary" />
                         </div>
                         <div>
-                          <div className="font-medium text-sm">{a.displayName || a.username}</div>
+                          <div className="font-semibold text-sm text-foreground">{a.displayName || a.username}</div>
                           <div className="text-xs text-muted-foreground">{a.email}</div>
                         </div>
                       </div>

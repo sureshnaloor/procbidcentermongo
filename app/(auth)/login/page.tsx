@@ -45,15 +45,19 @@ function LoginForm() {
   }
 
   return (
-    <Card className="shadow-xl border-0 ring-1 ring-border">
-      <CardHeader className="pb-4">
-        <CardTitle className="text-2xl font-bold">Welcome back</CardTitle>
-        <CardDescription>Sign in to your ProSource account</CardDescription>
+    <Card className="glass card-3d border-0 shadow-2xl animate-fade-in-up max-w-md mx-auto">
+      <CardHeader className="pb-2 text-center">
+        <CardTitle className="text-3xl font-bold tracking-tight text-gradient">
+          Welcome back
+        </CardTitle>
+        <CardDescription className="text-muted-foreground/90">
+          Sign in to your ProSource account
+        </CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4" id="login-form">
+        <form onSubmit={handleSubmit} className="space-y-5" id="login-form">
           {error && (
-            <div className="rounded-lg bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
+            <div className="rounded-xl bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
               {error}
             </div>
           )}
@@ -85,7 +89,7 @@ function LoginForm() {
               />
               <button
                 type="button"
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                 onClick={() => setShowPassword(!showPassword)}
                 tabIndex={-1}
               >
@@ -93,15 +97,15 @@ function LoginForm() {
               </button>
             </div>
           </div>
-          <Button type="submit" className="w-full" disabled={loading} id="login-submit-btn">
+          <Button type="submit" className="w-full h-11 text-base" disabled={loading} id="login-submit-btn">
             {loading ? <><Loader2 className="animate-spin" /> Signing in...</> : "Sign in"}
           </Button>
         </form>
       </CardContent>
       <CardFooter className="justify-center pb-6">
-        <p className="text-sm text-gray-500">
+        <p className="text-sm text-muted-foreground">
           Don&apos;t have an account?{" "}
-          <Link href="/register" className="font-medium text-primary hover:text-primary/80 hover:underline">
+          <Link href="/register" className="font-semibold text-primary hover:text-primary/80 link-underline">
             Register now
           </Link>
         </p>
@@ -113,9 +117,9 @@ function LoginForm() {
 export default function LoginPage() {
   return (
     <Suspense fallback={
-      <Card className="shadow-xl border-0 ring-1 ring-gray-200 dark:ring-gray-700">
+      <Card className="glass border-0 shadow-2xl max-w-md mx-auto animate-fade-in-up">
         <CardContent className="flex items-center justify-center py-16">
-          <Loader2 className="animate-spin h-6 w-6 text-gray-400" />
+          <Loader2 className="animate-spin h-6 w-6 text-muted-foreground" />
         </CardContent>
       </Card>
     }>

@@ -10,9 +10,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Edit, Trash2, FileText, CalendarClock, MapPin, DollarSign, Users, Loader2, ExternalLink, Plus, AlertCircle, Copy, Pencil, Download } from "lucide-react";
+import { Edit, Trash2, FileText, CalendarClock, MapPin, DollarSign, Users, Loader2, ExternalLink, Plus, AlertCircle, Copy, Pencil, Download, Ship } from "lucide-react";
 import { format } from "date-fns";
 import { documentCategoryLabel, getPublishDateIssues, PROCUREMENT_TYPES } from "@/lib/procurement";
+import { incotermLabel } from "@/lib/incoterms";
 import { OfferThreadPanel, type ThreadVendorOption } from "@/components/offer-thread-panel";
 import { PublishConfirmDialog } from "@/components/publish-confirm-dialog";
 import { downloadBoqFile } from "@/lib/boq-browser";
@@ -156,7 +157,7 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
     : (threadVendors.find((v) => v.id === selectedThreadVendor)?.name || "Supplier");
 
   return (
-    <div className="max-w-6xl mx-auto flex flex-col lg:flex-row gap-6 items-start">
+    <div className="max-w-6xl mx-auto flex flex-col lg:flex-row gap-6 items-start animate-fade-in-up">
     <div className="flex-1 min-w-0 max-w-4xl mx-auto lg:mx-0 space-y-6">
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
@@ -166,7 +167,7 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
             <Badge variant={STATUS_COLORS[tender.status] ?? "outline"}>{tender.status}</Badge>
             {biddingClosed && <Badge variant="warning">Bidding Closed</Badge>}
           </div>
-          <h1 className="text-2xl font-bold text-foreground">{tender.title}</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground font-[family-name:var(--font-heading)] text-gradient">{tender.title}</h1>
           {tender.company && (
             <div className="flex items-center gap-3 mt-1">
               <Link href={`/companies/${tender.company._id ?? tender.companyProfileId}`} className="text-sm text-primary hover:underline">
@@ -196,6 +197,13 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
         {tender.estimatedValue && <StatCard icon={DollarSign} label="Budget" value={`${tender.currency} ${tender.estimatedValue.toLocaleString()}`} />}
         {tender.bidDeadline && <StatCard icon={CalendarClock} label="Deadline" value={format(new Date(tender.bidDeadline), "dd MMM yyyy")} />}
         {tender.location && <StatCard icon={MapPin} label="Location" value={tender.location} />}
+        {tender.incoterm && (
+          <StatCard
+            icon={Ship}
+            label="Incoterm"
+            value={tender.incotermPlace ? `${tender.incoterm} — ${tender.incotermPlace}` : (incotermLabel(tender.incoterm) ?? tender.incoterm)}
+          />
+        )}
         <StatCard icon={Users} label="Bids" value={bids.length} />
       </div>
 
@@ -237,9 +245,9 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
       )}
 
       {isOwner && tender.status === "draft" && (
-        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 space-y-3">
+        <div className="rounded-lg border border-primary/30 bg-primary/10 p-4 space-y-3">
           <div className="flex items-start gap-2">
-            <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+            <AlertCircle className="h-4 w-4 text-primary mt-0.5 shrink-0" />
             <div className="text-sm">
               <div className="font-medium text-foreground">This {PROCUREMENT_TYPES[tender.type as keyof typeof PROCUREMENT_TYPES]?.label ?? "package"} is a draft</div>
               <p className="text-muted-foreground mt-0.5">
@@ -291,11 +299,11 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
             <p className="text-sm text-muted-foreground">{PROCUREMENT_TYPES[tender.type as keyof typeof PROCUREMENT_TYPES].summary}</p>
           )}
           {tender.description && (
-            <Card><CardContent className="pt-6"><p className="text-sm text-foreground dark:text-muted-foreground whitespace-pre-wrap">{tender.description}</p></CardContent></Card>
+            <Card className="glass card-3d border-0"><CardContent className="pt-6"><p className="text-sm text-foreground whitespace-pre-wrap">{tender.description}</p></CardContent></Card>
           )}
           {tender.categories?.length > 0 && (
-            <Card>
-              <CardHeader><CardTitle className="text-sm">Material & Service Groups</CardTitle></CardHeader>
+            <Card className="glass card-3d border-0">
+              <CardHeader><CardTitle className="text-sm font-[family-name:var(--font-heading)]">Material & Service Groups</CardTitle></CardHeader>
               <CardContent className="pt-0 flex flex-wrap gap-2">
                 {tender.categories.map((c: any) => (
                   <Badge key={c.id} variant="outline">{c.name}</Badge>
@@ -304,15 +312,15 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
             </Card>
           )}
           {tender.requirements && (
-            <Card><CardHeader><CardTitle className="text-sm">Requirements</CardTitle></CardHeader><CardContent className="pt-0"><p className="text-sm text-foreground dark:text-muted-foreground whitespace-pre-wrap">{tender.requirements}</p></CardContent></Card>
+            <Card className="glass card-3d border-0"><CardHeader><CardTitle className="text-sm font-[family-name:var(--font-heading)]">Requirements</CardTitle></CardHeader><CardContent className="pt-0"><p className="text-sm text-foreground whitespace-pre-wrap">{tender.requirements}</p></CardContent></Card>
           )}
         </TabsContent>
 
         {tender.boqItems?.length > 0 && (
           <TabsContent value="boq" className="mt-4">
-            <Card>
+            <Card className="glass card-3d border-0">
               <CardHeader className="flex-row items-start justify-between gap-3 space-y-0">
-                <CardTitle className="text-sm">Bill of Quantities</CardTitle>
+                <CardTitle className="text-sm font-[family-name:var(--font-heading)]">Bill of Quantities</CardTitle>
                 <Button
                   type="button"
                   variant="outline"
@@ -362,12 +370,12 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
               <Card key={c.slug || c.kind}>
                 <CardHeader>
                   <div className="flex items-center gap-2">
-                    <CardTitle className="text-sm">{c.title}</CardTitle>
+                    <CardTitle className="text-sm font-[family-name:var(--font-heading)]">{c.title}</CardTitle>
                     {c.required && <Badge variant="outline" className="text-[10px]">Required</Badge>}
                   </div>
                 </CardHeader>
                 <CardContent className="pt-0">
-                  <p className="text-sm text-foreground dark:text-muted-foreground whitespace-pre-wrap">{c.body}</p>
+                  <p className="text-sm text-foreground whitespace-pre-wrap">{c.body}</p>
                 </CardContent>
               </Card>
             ))}
@@ -394,8 +402,8 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
         {(isOwner || isAdmin) && tender.status !== "draft" && (
           <TabsContent value="suppliers" className="mt-4 space-y-4">
             {!biddingClosed && (
-              <Card>
-                <CardHeader><CardTitle className="text-sm">Invite suppliers</CardTitle></CardHeader>
+              <Card className="glass card-3d border-0">
+                <CardHeader><CardTitle className="text-sm font-[family-name:var(--font-heading)]">Invite suppliers</CardTitle></CardHeader>
                 <CardContent className="space-y-2">
                   <p className="text-xs text-muted-foreground">Invited suppliers can prepare offers immediately. Others may request access for your approval.</p>
                   <div className="grid gap-2 max-h-64 overflow-y-auto">

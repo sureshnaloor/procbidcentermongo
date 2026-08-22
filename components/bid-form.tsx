@@ -17,9 +17,11 @@ import { wordsDiffer } from "@/lib/text-diff";
 import { ClauseDiffText } from "@/components/clause-diff";
 import {
   CUSTOM_FIELD_SUGGESTIONS,
+  CHARGE_SUGGESTIONS,
   DELIVERY_MODES,
   MAX_CUSTOM_FIELDS,
   MIN_QTY_CHANGE_REASON,
+  bidCommercialBreakdown,
   quantityChangeError,
   type DeliveryMode,
 } from "@/lib/bid-line";
@@ -31,6 +33,7 @@ import { downloadBoqFile, readFileAsDataUrl } from "@/lib/boq-browser";
 interface CustomField {
   label: string;
   value: string;
+  type?: 'value' | 'percent';
 }
 
 interface LineItem {
@@ -108,13 +111,20 @@ function formatAmount(value: number): string {
   return value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-function buildPayload(tender: any, form: any, lineItems: LineItem[], clauseModes: Record<string, ClauseMode>, clauseBodies: Record<string, string>, lineTotal: number) {
+function buildPayload(tender: any, form: any, lineItems: LineItem[], clauseModes: Record<string, ClauseMode>, clauseBodies: Record<string, string>, lineTotal: number, charges: CustomField[]) {
   const currency = form.currency.trim() || "USD";
   return {
     tenderId: String(tender._id),
     totalPrice: form.totalPrice ? parseAmount(form.totalPrice) : (lineTotal || undefined),
     currency,
     validityDays: parseInt(form.validityDays, 10) || 90,
+    discountType: form.discountType || null,
+    discountValue: form.discountType && form.discountValue ? parseAmount(form.discountValue) : null,
+    vatPercent: form.vatPercent ? parseAmount(form.vatPercent) : null,
+    otherCharges: charges
+      .filter((c) => c.label.trim() && c.value.trim())
+      .slice(0, 12)
+      .map((c) => ({ label: c.label.trim(), type: c.type || "value", amount: parseAmount(c.value) })),
     technicalProposal: form.technicalProposal,
     commercialProposal: form.commercialProposal,
     notes: form.notes,
@@ -160,10 +170,22 @@ export function BidForm({ tender, bid, mode }: { tender: any; bid?: any; mode: "
     totalPrice: "",
     currency: bid?.currency || tender.currency || "USD",
     validityDays: bid?.validityDays != null ? String(bid.validityDays) : "90",
+    discountType: (bid?.discountType as string) || "",
+    discountValue: bid?.discountValue != null ? String(bid.discountValue) : "",
+    vatPercent: bid?.vatPercent != null ? String(bid.vatPercent) : "",
     technicalProposal: bid?.technicalProposal || "",
     commercialProposal: bid?.commercialProposal || "",
     notes: bid?.notes || "",
   });
+  const [charges, setCharges] = useState<CustomField[]>(() =>
+    Array.isArray(bid?.otherCharges)
+      ? bid.otherCharges.map((c: any) => ({
+          label: c.label || "",
+          value: c.amount != null ? String(c.amount) : "",
+          type: c.type || "value",
+        }))
+      : []
+  );
   const [lineItems, setLineItems] = useState<LineItem[]>(() => {
     if (Array.isArray(bid?.lineItems) && bid.lineItems.length > 0) {
       return bid.lineItems.map((item: any) => lineFromStored(item));
@@ -311,6 +333,23 @@ export function BidForm({ tender, bid, mode }: { tender: any; bid?: any; mode: "
   const currency = form.currency.trim() || "USD";
   const lineTotal = lineItems.reduce((sum, l) => sum + parseAmount(l.quantity) * parseAmount(l.unitPrice), 0);
   const computedTotal = lineTotal;
+  const grossTotal = form.totalPrice ? parseAmount(form.totalPrice) : lineTotal;
+  const commercial = bidCommercialBreakdown({
+    totalPrice: grossTotal || undefined,
+    discountType: (form.discountType || null) as "percent" | "amount" | null,
+    discountValue: form.discountValue ? parseAmount(form.discountValue) : null,
+    vatPercent: form.vatPercent ? parseAmount(form.vatPercent) : null,
+    otherCharges: charges
+      .filter((c) => c.label.trim() && c.value.trim())
+      .map((c) => ({ label: c.label.trim(), amount: parseAmount(c.value) })),
+  });
+  const showCommercial = Boolean(
+    commercial && (commercial.discount > 0 || commercial.vat > 0 || commercial.chargesTotal > 0)
+  );
+
+  function setCharge(index: number, patch: Partial<CustomField>) {
+    setCharges((prev) => prev.map((c, i) => (i === index ? { ...c, ...patch } : c)));
+  }
 
   function quantityIssue(line: LineItem) {
     if (line.originalQuantity == null) return null;
@@ -335,7 +374,7 @@ export function BidForm({ tender, bid, mode }: { tender: any; bid?: any; mode: "
         });
         if (missing) throw new Error(`Please accept or accept with conditions: ${missing.title}`);
       }
-      const payload = buildPayload(tender, form, lineItems, clauseModes, clauseBodies, lineTotal);
+      const payload = buildPayload(tender, form, lineItems, clauseModes, clauseBodies, lineTotal, charges);
       const url = mode === "create" ? "/api/bids" : `/api/bids/${bid._id}`;
       const method = mode === "create" ? "POST" : "PUT";
       const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
@@ -370,13 +409,13 @@ export function BidForm({ tender, bid, mode }: { tender: any; bid?: any; mode: "
   });
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
+    <div className="max-w-5xl mx-auto space-y-6 animate-fade-in-up">
       <div className="flex items-center gap-3">
         <Link href={mode === "create" ? `/tenders/${tenderId}` : `/bids/${bid._id}`}>
           <Button variant="ghost" size="icon" className="shrink-0"><ArrowLeft className="h-4 w-4" /></Button>
         </Link>
         <div>
-          <h1 className="text-2xl font-bold text-foreground">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground font-[family-name:var(--font-heading)] text-gradient">
             {mode === "revise"
               ? (bid?.revisionRequest?.source === "company_verbal" ? "Revise offer (verbal agreement)" : "Revise Offer")
               : mode === "edit" ? "Modify Offer" : "Prepare Offer"}
@@ -388,8 +427,8 @@ export function BidForm({ tender, bid, mode }: { tender: any; bid?: any; mode: "
         </div>
       </div>
 
-      <Card>
-        <CardHeader><CardTitle className="text-base">Pricing & Terms</CardTitle></CardHeader>
+      <Card className="glass border-0">
+        <CardHeader><CardTitle className="text-base font-[family-name:var(--font-heading)]">Pricing & Terms</CardTitle></CardHeader>
         <CardContent className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="space-y-1.5">
             <Label htmlFor="bid-currency">Currency</Label>
@@ -407,10 +446,132 @@ export function BidForm({ tender, bid, mode }: { tender: any; bid?: any; mode: "
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="glass border-0">
+        <CardHeader>
+          <CardTitle className="text-base font-[family-name:var(--font-heading)]">Commercial terms</CardTitle>
+          <p className="text-xs text-muted-foreground mt-1">Discount, taxes and extra costs that apply on the whole offer.</p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="bid-discount-type">Discount type</Label>
+              <Select value={form.discountType || "none"} onValueChange={(v) => setField("discountType", v === "none" ? "" : v)}>
+                <SelectTrigger id="bid-discount-type"><SelectValue placeholder="No discount" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No discount</SelectItem>
+                  <SelectItem value="percent">Percent (%)</SelectItem>
+                  <SelectItem value="amount">Fixed amount ({currency})</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="bid-discount-value">Discount value</Label>
+              <Input
+                type="number"
+                id="bid-discount-value"
+                value={form.discountValue}
+                onChange={(e) => setField("discountValue", e.target.value)}
+                placeholder={form.discountType === "percent" ? "e.g. 2" : "0.00"}
+                disabled={!form.discountType}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="bid-vat">VAT / tax (%)</Label>
+              <Input
+                type="number"
+                id="bid-vat"
+                value={form.vatPercent}
+                onChange={(e) => setField("vatPercent", e.target.value)}
+                placeholder="e.g. 5"
+              />
+              <p className="text-[11px] text-muted-foreground">Applied on the offer value after discount.</p>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label>Other costs (packing, freight, duties, transport…)</Label>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setCharges((prev) => [...prev, { label: "", value: "", type: "value" }])}
+                disabled={charges.length >= 12}
+              >
+                <Plus className="h-3.5 w-3.5" /> Add cost
+              </Button>
+            </div>
+            {charges.length === 0 && (
+              <p className="text-[11px] text-muted-foreground">No extra costs. Add packing & forwarding, shipping, import duty, inland transport, local tax, etc.</p>
+            )}
+            {charges.map((charge, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <Input
+                  list="charge-suggestions"
+                  value={charge.label}
+                  onChange={(e) => setCharge(i, { label: e.target.value })}
+                  placeholder="Cost label"
+                  className="flex-1"
+                />
+                <Select
+                  value={charge.type || "value"}
+                  onValueChange={(v) => setCharge(i, { type: v as 'value' | 'percent' })}
+                >
+                  <SelectTrigger className="w-40">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="value">Value ({currency})</SelectItem>
+                    <SelectItem value="percent">Percent (%)</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Input
+                  type="number"
+                  value={charge.value}
+                  onChange={(e) => setCharge(i, { value: e.target.value })}
+                  placeholder={charge.type === "percent" ? "% of discounted value" : `Amount (${currency})`}
+                  className="w-44"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="text-muted-foreground hover:text-destructive shrink-0"
+                  onClick={() => setCharges((prev) => prev.filter((_, idx) => idx !== i))}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            ))}
+            <datalist id="charge-suggestions">
+              {CHARGE_SUGGESTIONS.map((s) => (
+                <option key={s} value={s} />
+              ))}
+            </datalist>
+          </div>
+
+          {showCommercial && commercial && (
+            <div className="rounded-lg border border-border bg-accent/40 p-3 text-sm space-y-1">
+              <div className="flex justify-between"><span className="text-muted-foreground">Offer value ({currency})</span><span className="font-medium">{formatAmount(commercial.gross)}</span></div>
+              {commercial.discount > 0 && (
+                <div className="flex justify-between"><span className="text-muted-foreground">Discount{form.discountType === "percent" ? ` (${form.discountValue}%)` : ""}</span><span className="font-medium text-emerald-600 dark:text-emerald-400">−{formatAmount(commercial.discount)}</span></div>
+              )}
+              {commercial.vat > 0 && (
+                <div className="flex justify-between"><span className="text-muted-foreground">VAT ({form.vatPercent}%)</span><span className="font-medium">+{formatAmount(commercial.vat)}</span></div>
+              )}
+              {commercial.chargesTotal > 0 && (
+                <div className="flex justify-between"><span className="text-muted-foreground">Other costs</span><span className="font-medium">+{formatAmount(commercial.chargesTotal)}</span></div>
+              )}
+              <div className="flex justify-between pt-1 border-t border-border"><span className="font-semibold">Effective total</span><span className="font-bold text-primary">{currency} {formatAmount(commercial.effective)}</span></div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="glass border-0">
         <CardHeader className="flex-row items-start justify-between gap-3 space-y-0">
           <div>
-            <CardTitle className="text-base">Line Items</CardTitle>
+            <CardTitle className="text-base font-[family-name:var(--font-heading)]">Line Items</CardTitle>
             <p className="text-xs text-muted-foreground mt-1">
               Download the BOQ, fill quoted qty and unit price in Excel, then upload it here. You can still edit lines in this form.
             </p>
@@ -642,8 +803,8 @@ export function BidForm({ tender, bid, mode }: { tender: any; bid?: any; mode: "
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader><CardTitle className="text-base">Proposals</CardTitle></CardHeader>
+      <Card className="glass border-0">
+        <CardHeader><CardTitle className="text-base font-[family-name:var(--font-heading)]">Proposals</CardTitle></CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-1.5">
             <Label>Technical Proposal</Label>
@@ -661,9 +822,9 @@ export function BidForm({ tender, bid, mode }: { tender: any; bid?: any; mode: "
       </Card>
 
       {(tender.clauses ?? []).length > 0 && (
-        <Card>
+        <Card className="glass border-0">
           <CardHeader>
-            <CardTitle className="text-base">Accept tender terms</CardTitle>
+            <CardTitle className="text-base font-[family-name:var(--font-heading)]">Accept tender terms</CardTitle>
             <p className="text-xs text-muted-foreground mt-1">You can accept a clause as written, or accept it with conditions by editing the text. Edited wording is shown in red.</p>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -715,8 +876,8 @@ export function BidForm({ tender, bid, mode }: { tender: any; bid?: any; mode: "
                         onChange={(e) => setClauseBodies((prev) => ({ ...prev, [key]: e.target.value }))}
                       />
                       {modified && (
-                        <div className="rounded-md border border-red-500/30 bg-red-500/5 p-3 text-sm">
-                          <div className="text-xs font-medium text-red-600 dark:text-red-400 mb-1">Changes vs original (red = your wording)</div>
+                        <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm">
+                          <div className="text-xs font-medium text-destructive mb-1">Changes vs original (red = your wording)</div>
                           <ClauseDiffText original={c.body || ""} proposed={edited} />
                         </div>
                       )}

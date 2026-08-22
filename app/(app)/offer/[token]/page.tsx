@@ -44,11 +44,11 @@ export default function OfferAccessPage({ params }: { params: Promise<{ token: s
 
   if (status === "loading" || isLoading || (isFetched && data)) {
     return (
-      <div className="flex items-center justify-center py-16">
+      <div className="animate-fade-in-up flex items-center justify-center py-16">
         <Loader2 className="animate-spin h-6 w-6 text-muted-foreground" />
       </div>
     );
   }
 
-  return <div className="min-h-[50vh]" />;
+  return <div className="animate-fade-in-up min-h-[50vh] bg-card border border-border rounded-2xl shadow-[var(--shadow-card)]" />;
 }

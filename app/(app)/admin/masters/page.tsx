@@ -112,9 +112,9 @@ function GroupCatalog({ category, title, hint }: { category: Category; title: st
 
   return (
     <div className="space-y-4">
-      <Card>
+      <Card className="glass card-3d border-0">
         <CardHeader>
-          <CardTitle className="text-sm">Add {title.slice(0, -1)}</CardTitle>
+          <CardTitle className="text-sm font-[family-name:var(--font-heading)]">Add {title.slice(0, -1)}</CardTitle>
           <p className="text-xs text-muted-foreground">{hint}</p>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -154,19 +154,21 @@ function GroupCatalog({ category, title, hint }: { category: Category; title: st
           <Loader2 className="animate-spin h-6 w-6 text-muted-foreground" />
         </div>
       ) : groups.length === 0 ? (
-        <div className="text-center py-12 text-sm text-muted-foreground">No {title.toLowerCase()} yet. Add the first group above.</div>
+        <div className="text-center py-12 rounded-2xl border border-dashed border-border bg-muted/20 text-sm text-muted-foreground font-medium">
+          No {title.toLowerCase()} yet. Add the first group above.
+        </div>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-2 stagger-children">
           {groups.map((group) => {
             const open = !!expanded[group._id];
             const groupItems = itemsByGroup(group._id);
             const draft = itemDraft[group._id] ?? { code: "", description: "" };
             return (
-              <div key={group._id} className="rounded-xl border border-border bg-card overflow-hidden">
+              <div key={group._id} className="rounded-2xl border border-border bg-card overflow-hidden shadow-sm hover:border-primary/20 transition-colors">
                 <div className="flex items-center gap-2 p-3">
                   <button
                     type="button"
-                    className="p-1 rounded hover:bg-muted dark:hover:bg-muted"
+                    className="p-1 rounded-lg hover:bg-muted transition-colors"
                     onClick={() => setExpanded((prev) => ({ ...prev, [group._id]: !open }))}
                     aria-label={open ? "Collapse items" : "Expand items"}
                   >
@@ -174,7 +176,7 @@ function GroupCatalog({ category, title, hint }: { category: Category; title: st
                   </button>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-foreground">{group.name}</span>
+                      <span className="text-sm font-semibold text-foreground">{group.name}</span>
                       <Badge variant="outline" className="text-[10px]">{groupItems.length} items</Badge>
                     </div>
                     {group.description && <p className="text-xs text-muted-foreground mt-0.5 truncate">{group.description}</p>}
@@ -191,7 +193,7 @@ function GroupCatalog({ category, title, hint }: { category: Category; title: st
                   </Button>
                 </div>
                 {open && (
-                  <div className="border-t border-border p-3 space-y-2 bg-accent/70 dark:bg-background/40">
+                  <div className="border-t border-border p-3 space-y-2 bg-muted/30">
                     <div className="flex flex-wrap gap-2">
                       <Input
                         placeholder="Item code"
@@ -225,10 +227,10 @@ function GroupCatalog({ category, title, hint }: { category: Category; title: st
                       <p className="text-xs text-muted-foreground py-1">No items in this group yet.</p>
                     ) : (
                       groupItems.map((item) => (
-                        <div key={item._id} className="flex items-center justify-between rounded-lg border border-border bg-card px-3 py-2">
+                        <div key={item._id} className="flex items-center justify-between rounded-xl border border-border bg-card px-3 py-2">
                           <div>
                             <span className="font-mono text-xs text-muted-foreground mr-2">{item.code}</span>
-                            <span className="text-sm">{item.description}</span>
+                            <span className="text-sm text-foreground">{item.description}</span>
                           </div>
                           <Button variant="ghost" size="icon" onClick={() => delItem.mutate(item._id)} id={`del-item-${item._id}`}>
                             <Trash2 className="h-3.5 w-3.5 text-destructive/70" />
@@ -249,11 +251,13 @@ function GroupCatalog({ category, title, hint }: { category: Category; title: st
 
 export default function AdminMasterDataPage() {
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-in-up">
       <div>
         <div className="flex items-center gap-2">
-          <Layers className="h-5 w-5 text-primary" />
-          <h1 className="text-2xl font-bold text-foreground">Global Masters</h1>
+          <Layers className="h-6 w-6 text-primary" />
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground font-[family-name:var(--font-heading)] text-gradient">
+            Global Masters
+          </h1>
         </div>
         <p className="text-sm text-muted-foreground mt-1">
           Material groups first, then service groups. Companies select these when publishing tenders so suppliers can prepare matching offers.
@@ -261,7 +265,7 @@ export default function AdminMasterDataPage() {
       </div>
 
       <Tabs defaultValue="material">
-        <TabsList>
+        <TabsList className="glass border-0">
           <TabsTrigger value="material">Material Groups</TabsTrigger>
           <TabsTrigger value="service">Service Groups</TabsTrigger>
         </TabsList>

@@ -39,15 +39,19 @@ export default function VendorPublicPage({ params }: { params: Promise<{ id: str
   const canMessage = me && String(me._id) !== String(vendor._id);
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
+    <div className="max-w-3xl mx-auto space-y-6 animate-fade-in-up">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <Link href="/vendors" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground mb-2">
+          <Link href="/vendors" className="inline-flex items-center gap-1 text-xs font-semibold text-muted-foreground hover:text-foreground mb-2">
             <ArrowLeft className="h-3.5 w-3.5" /> All suppliers
           </Link>
           <div className="flex items-center gap-2 mb-1">
-            <Building2 className="h-5 w-5 text-primary" />
-            <h1 className="text-2xl font-bold text-foreground">{vendor.companyName || "Supplier"}</h1>
+            <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center">
+              <Building2 className="h-5 w-5 text-primary" />
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground font-[family-name:var(--font-heading)] text-gradient">
+              {vendor.companyName || "Supplier"}
+            </h1>
             {vendor.isVerified && <Badge variant="success" className="flex items-center gap-1"><Shield className="h-3 w-3" />Verified</Badge>}
           </div>
           <p className="text-sm text-muted-foreground">
@@ -65,8 +69,8 @@ export default function VendorPublicPage({ params }: { params: Promise<{ id: str
         Review this supplier&apos;s groups and documents before inviting them to an RFQ, RFP, or tender.
       </p>
 
-      <Card>
-        <CardHeader><CardTitle className="text-sm">Material &amp; service groups</CardTitle></CardHeader>
+      <Card className="glass card-3d border-0">
+        <CardHeader><CardTitle className="text-sm font-[family-name:var(--font-heading)]">Material &amp; service groups</CardTitle></CardHeader>
         <CardContent className="space-y-4">
           {groups.length === 0 ? (
             <p className="text-sm text-muted-foreground">This supplier has not declared any material or service groups yet.</p>
@@ -74,7 +78,7 @@ export default function VendorPublicPage({ params }: { params: Promise<{ id: str
             <>
               {materialGroups.length > 0 && (
                 <div className="space-y-2">
-                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Materials</div>
+                  <div className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Materials</div>
                   <div className="flex flex-wrap gap-2">
                     {materialGroups.map((g: any) => (
                       <Badge key={g._id} variant="outline">{g.name}</Badge>
@@ -84,7 +88,7 @@ export default function VendorPublicPage({ params }: { params: Promise<{ id: str
               )}
               {serviceGroups.length > 0 && (
                 <div className="space-y-2">
-                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Services</div>
+                  <div className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Services</div>
                   <div className="flex flex-wrap gap-2">
                     {serviceGroups.map((g: any) => (
                       <Badge key={g._id}>{g.name}</Badge>
@@ -97,10 +101,10 @@ export default function VendorPublicPage({ params }: { params: Promise<{ id: str
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader><CardTitle className="text-sm">Supplier information</CardTitle></CardHeader>
+      <Card className="glass card-3d border-0">
+        <CardHeader><CardTitle className="text-sm font-[family-name:var(--font-heading)]">Supplier information</CardTitle></CardHeader>
         <CardContent className="space-y-3 text-sm">
-          {vendor.description && <p className="text-foreground dark:text-muted-foreground whitespace-pre-wrap">{vendor.description}</p>}
+          {vendor.description && <p className="text-foreground whitespace-pre-wrap">{vendor.description}</p>}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-muted-foreground">
             {vendor.registrationNumber && <div>Registration: {vendor.registrationNumber}</div>}
             {vendor.contactPerson && <div>Contact: {vendor.contactPerson}</div>}
@@ -110,7 +114,7 @@ export default function VendorPublicPage({ params }: { params: Promise<{ id: str
             )}
             {vendor.address && <div className="md:col-span-2">{vendor.address}</div>}
             {vendor.website && (
-              <a href={vendor.website.startsWith("http") ? vendor.website : `https://${vendor.website}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-primary hover:underline">
+              <a href={vendor.website.startsWith("http") ? vendor.website : `https://${vendor.website}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-primary hover:text-primary/80 link-underline">
                 <Globe className="h-3.5 w-3.5" />{vendor.website}
               </a>
             )}
@@ -118,21 +122,21 @@ export default function VendorPublicPage({ params }: { params: Promise<{ id: str
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader><CardTitle className="text-sm">Public documents</CardTitle></CardHeader>
+      <Card className="glass card-3d border-0">
+        <CardHeader><CardTitle className="text-sm font-[family-name:var(--font-heading)]">Public documents</CardTitle></CardHeader>
         <CardContent>
           {docs.length === 0 ? (
             <p className="text-sm text-muted-foreground">No public documents shared yet.</p>
           ) : (
             <div className="grid gap-2">
               {docs.map((d: any) => (
-                <a key={d._id} href={d.fileUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 rounded-lg border border-border p-3 hover:bg-accent">
+                <a key={d._id} href={d.fileUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 rounded-xl border border-border p-3 hover:bg-muted/40 transition-colors group">
                   <FileText className="h-4 w-4 text-primary shrink-0" />
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium truncate">{d.name}</div>
+                    <div className="text-sm font-medium truncate group-hover:text-primary transition-colors">{d.name}</div>
                     <div className="text-xs text-muted-foreground">{categoryLabel(d.category)}</div>
                   </div>
-                  <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
+                  <ExternalLink className="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary transition-colors" />
                 </a>
               ))}
             </div>

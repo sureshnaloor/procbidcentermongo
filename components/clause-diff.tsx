@@ -28,7 +28,7 @@ export function ClauseDiffText({
           );
         }
         return (
-          <span key={i} className="font-semibold text-red-600 dark:text-red-400">
+          <span key={i} className="font-semibold text-destructive">
             {part.value}
           </span>
         );

@@ -1,6 +1,7 @@
 import * as XLSX from 'xlsx';
 import { NextResponse } from 'next/server';
 import { comparisonColumns, extraBidLines, findClauseResponse, findMatchingLine, lineDelivery, lineOtherData, clauseStatusLabel } from '@/lib/comparison';
+import { bidCommercialBreakdown } from '@/lib/bid-line';
 import { CLAUSE_KIND_LABELS, type ClauseKindConst } from '@/lib/constants';
 
 function names(list: { name: string }[]) {
@@ -56,15 +57,25 @@ export function buildComparisonWorkbook(data: any, includeOriginal: boolean): Bu
     ['Quoted', names(data.participation?.quoted ?? [])],
     ['Did not quote', names(data.participation?.notQuoted ?? [])],
     ['Rejected', names(data.participation?.rejected ?? [])],
+    ['Offline invited', names(data.participation?.offlineInvited ?? [])],
+    ['Offline participated', names(data.participation?.offlineParticipated ?? [])],
+    ['Incoterm', tender.incoterm ? `${tender.incoterm}${tender.incotermPlace ? ` — ${tender.incotermPlace}` : ''}` : ''],
     [],
-    ['Supplier', 'Status', 'Offer total', 'Validity days', 'Currency'],
-    ...bids.map((bid: any) => [
-      bid.vendor?.companyName || 'Supplier',
-      bid.status,
-      bid.totalPrice ?? '',
-      bid.validityDays ?? '',
-      bid.currency || currency,
-    ]),
+    ['Supplier', 'Status', 'Offer total', 'Discount', 'VAT', 'Other charges', 'Effective total', 'Validity days', 'Currency'],
+    ...bids.map((bid: any) => {
+      const breakdown = bidCommercialBreakdown(bid);
+      return [
+        bid.vendor?.companyName || 'Supplier',
+        bid.status,
+        bid.totalPrice ?? '',
+        breakdown && breakdown.discount > 0 ? -breakdown.discount : '',
+        breakdown && breakdown.vat > 0 ? breakdown.vat : '',
+        breakdown && breakdown.chargesTotal > 0 ? breakdown.chargesTotal : '',
+        breakdown?.effective ?? '',
+        bid.validityDays ?? '',
+        bid.currency || currency,
+      ];
+    }),
   ];
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(summary), 'Summary');
 

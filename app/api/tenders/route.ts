@@ -10,6 +10,7 @@ import { normalizeTenderClauses } from '@/lib/clauses';
 import { DEFAULT_PROCUREMENT_TYPE, DOCUMENT_CATEGORY_VALUES, getPublishBlockers, getPublishDateIssues } from '@/lib/procurement';
 import { isOfferAuthorized } from '@/lib/tender-access';
 import { resolvedBidTotal } from '@/lib/bid-line';
+import { INCOTERM_CODES } from '@/lib/incoterms';
 import type { Filter } from 'mongodb';
 import type { ITender, ITenderBoqItem } from '@/lib/types';
 
@@ -172,6 +173,8 @@ export async function POST(req: NextRequest) {
     deliveryDeadline: z.string().optional(),
     estimatedValue: z.number().optional(),
     currency: z.string().default('USD'),
+    incoterm: z.enum(INCOTERM_CODES).optional(),
+    incotermPlace: z.string().max(200).optional(),
     location: z.string().optional(),
     requirements: z.string().optional(),
     termsConditions: z.string().optional(),
@@ -231,6 +234,8 @@ export async function POST(req: NextRequest) {
       deliveryDeadline: data.deliveryDeadline ? parseDateEndOfDay(data.deliveryDeadline) : undefined,
       estimatedValue: data.estimatedValue,
       currency: data.currency,
+      incoterm: data.incoterm,
+      incotermPlace: data.incoterm ? data.incotermPlace : undefined,
       location: data.location,
       requirements: data.requirements,
       termsConditions: data.termsConditions,

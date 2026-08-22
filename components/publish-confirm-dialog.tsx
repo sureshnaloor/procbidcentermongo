@@ -39,7 +39,7 @@ export function PublishConfirmDialog({
                 You can still manage invites and later close, award, or cancel it.
               </p>
               {warnings.length > 0 && (
-                <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-foreground space-y-1.5">
+                <div className="rounded-md border border-primary/30 bg-primary/10 p-3 text-sm text-foreground space-y-1.5">
                   <div className="font-medium">Please confirm these dates</div>
                   {warnings.map((warning) => (
                     <p key={warning} className="text-muted-foreground">{warning}</p>

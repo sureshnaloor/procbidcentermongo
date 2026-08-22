@@ -135,3 +135,62 @@ export function resolvedBidTotal(bid: { totalPrice?: number | null; lineItems?: 
   if (bid.totalPrice == null || Number.isNaN(Number(bid.totalPrice))) return undefined;
   return Number(bid.totalPrice);
 }
+
+export const CHARGE_SUGGESTIONS = [
+  'Packing & forwarding',
+  'Freight / shipping',
+  'Import duty',
+  'Import tariff',
+  'Inland transport (port to site)',
+  'Local tax',
+] as const;
+
+export type BidCommercialBreakdown = {
+  gross: number;
+  discount: number;
+  taxable: number;
+  vat: number;
+  chargesTotal: number;
+  effective: number;
+};
+
+export function bidCommercialBreakdown(bid: {
+  totalPrice?: number | null;
+  lineItems?: Array<{ quantity?: number; unitPrice?: number; totalPrice?: number }> | null;
+  discountType?: 'percent' | 'amount' | null;
+  discountValue?: number | null;
+  vatPercent?: number | null;
+  otherCharges?: Array<{ label?: string; type?: 'value' | 'percent'; amount?: number }> | null;
+}): BidCommercialBreakdown | null {
+  const gross = resolvedBidTotal(bid);
+  if (gross == null) return null;
+  const rawValue = Number(bid.discountValue || 0);
+  let discount = 0;
+  if (bid.discountType === 'percent' && rawValue > 0) {
+    discount = gross * (Math.min(rawValue, 100) / 100);
+  } else if (bid.discountType === 'amount' && rawValue > 0) {
+    discount = Math.min(rawValue, gross);
+  }
+  const taxable = Math.max(0, gross - discount);
+  const vatPct = Number(bid.vatPercent || 0);
+  const vat = vatPct > 0 ? taxable * (vatPct / 100) : 0;
+  const chargesTotal = (bid.otherCharges ?? []).reduce((sum, c) => {
+    const amount = Number(c?.amount) || 0;
+    const charge = c?.type === 'percent' ? taxable * (amount / 100) : amount;
+    return sum + charge;
+  }, 0);
+  const effective = taxable + vat + chargesTotal;
+  return { gross, discount, taxable, vat, chargesTotal, effective };
+}
+
+export function effectiveBidTotal(bid: Parameters<typeof bidCommercialBreakdown>[0]): number | undefined {
+  return bidCommercialBreakdown(bid)?.effective;
+}
+
+export function hasCommercialTerms(bid: Parameters<typeof bidCommercialBreakdown>[0]): boolean {
+  return Boolean(
+    (bid.discountValue && bid.discountValue > 0)
+    || (bid.vatPercent && bid.vatPercent > 0)
+    || (bid.otherCharges ?? []).some((c) => Number(c?.amount) > 0)
+  );
+}

@@ -26,7 +26,7 @@ import { formatDistanceToNow } from "date-fns";
 import { clauseKey } from "@/lib/clauses";
 import { wordsDiffer } from "@/lib/text-diff";
 import { ClauseDiffText } from "@/components/clause-diff";
-import { formatDelivery } from "@/lib/bid-line";
+import { formatDelivery, bidCommercialBreakdown, hasCommercialTerms } from "@/lib/bid-line";
 import { OfferConfirmDialog, type OfferConfirmKind, type OfferConfirmPayload } from "@/components/offer-confirm-dialog";
 import { OfferThreadPanel } from "@/components/offer-thread-panel";
 import { readFileAsDataUrl } from "@/lib/boq-browser";
@@ -229,13 +229,13 @@ export default function BidDetailPage({ params }: { params: Promise<{ id: string
     : (bid.vendor?.companyName || "Supplier");
 
   return (
-    <div className="max-w-6xl mx-auto flex flex-col lg:flex-row gap-6 items-start">
+    <div className="max-w-6xl mx-auto flex flex-col lg:flex-row gap-6 items-start animate-fade-in-up">
     <div className="flex-1 min-w-0 max-w-3xl mx-auto lg:mx-0 space-y-6">
       <div className="flex items-center gap-3">
         <Link href="/bids"><Button variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button></Link>
         <div className="flex-1">
           <div className="flex items-center gap-2">
-            <h1 className="text-xl font-bold text-foreground">Bid #{id.slice(-6)}</h1>
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground font-[family-name:var(--font-heading)] text-gradient">Bid #{id.slice(-6)}</h1>
             <Badge variant={STATUS_COLORS[bid.status] ?? "outline"}>{bid.status?.replace("_", " ")}</Badge>
           </div>
           {bid.tender && <Link href={`/tenders/${bid.tenderId}`} className="text-sm text-primary hover:underline">{bid.tender.title}</Link>}
@@ -293,7 +293,7 @@ export default function BidDetailPage({ params }: { params: Promise<{ id: string
         </div>
       )}
       {isVendorOwner && bid.revisionRequest?.pendingApproval && !bid.revisionRequest?.open && (
-        <div className="rounded-lg border border-teal-500/30 bg-teal-500/5 p-4 text-sm">
+        <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 text-sm">
           <p className="font-medium">Your request to revise is waiting for company approval.</p>
           {bid.revisionRequest.note && <p className="text-muted-foreground mt-1">{bid.revisionRequest.note}</p>}
         </div>
@@ -311,7 +311,7 @@ export default function BidDetailPage({ params }: { params: Promise<{ id: string
       )}
 
       {isCompanyOwner && bid.revisionRequest?.pendingApproval && !bid.revisionRequest?.open && (
-        <div className="rounded-lg border border-teal-500/30 bg-teal-500/5 p-4 text-sm space-y-2">
+        <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 text-sm space-y-2">
           <p className="font-medium">Supplier requested a revision to this offer.</p>
           {bid.revisionRequest.note && <p className="text-muted-foreground">{bid.revisionRequest.note}</p>}
           <div className="flex gap-2">
@@ -326,7 +326,7 @@ export default function BidDetailPage({ params }: { params: Promise<{ id: string
       )}
 
       {isCompanyOwner && bid.revisionRequest?.open && (
-        <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 text-sm">
+        <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 text-sm">
           <p className="font-medium">
             {bid.revisionRequest.source === "company_verbal"
               ? "Verbal-agreement revision is in progress."
@@ -408,8 +408,8 @@ export default function BidDetailPage({ params }: { params: Promise<{ id: string
       )}
 
       {/* Bid details */}
-      <Card>
-        <CardHeader><CardTitle className="text-base">Bid Summary</CardTitle></CardHeader>
+      <Card className="glass card-3d border-0">
+        <CardHeader><CardTitle className="text-base font-[family-name:var(--font-heading)]">Bid Summary</CardTitle></CardHeader>
         <CardContent className="grid grid-cols-2 gap-4 text-sm">
           {bid.totalPrice && <div><span className="text-muted-foreground">Total Price</span><div className="font-semibold">{bid.currency} {bid.totalPrice.toLocaleString()}</div></div>}
           <div><span className="text-muted-foreground">Currency</span><div className="font-semibold">{bid.currency}</div></div>
@@ -417,6 +417,41 @@ export default function BidDetailPage({ params }: { params: Promise<{ id: string
           {bid.submittedAt && <div><span className="text-muted-foreground">Submitted</span><div className="font-semibold">{formatDistanceToNow(new Date(bid.submittedAt), { addSuffix: true })}</div></div>}
           {bid.withdrawnAt && <div><span className="text-muted-foreground">Withdrawn</span><div className="font-semibold">{formatDistanceToNow(new Date(bid.withdrawnAt), { addSuffix: true })}</div></div>}
           {bid.vendor && <div className="col-span-2"><span className="text-muted-foreground">Vendor</span><div className="font-semibold">{bid.vendor.companyName}</div></div>}
+          {hasCommercialTerms(bid) && (() => {
+            const breakdown = bidCommercialBreakdown(bid);
+            if (!breakdown) return null;
+            const fmt = (v: number) => `${bid.currency} ${v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            return (
+              <div className="col-span-2 rounded-md border border-border bg-muted/40 p-3 space-y-1 text-sm">
+                <div className="font-medium">Commercial breakdown</div>
+                {breakdown.discount > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Discount{bid.discountType === "percent" ? ` (${bid.discountValue}%)` : ""}</span>
+                    <span className="text-emerald-600 dark:text-emerald-400">−{fmt(breakdown.discount)}</span>
+                  </div>
+                )}
+                {breakdown.vat > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">VAT ({bid.vatPercent}%)</span>
+                    <span>+{fmt(breakdown.vat)}</span>
+                  </div>
+                )}
+                {(bid.otherCharges ?? []).filter((c: any) => Number(c.amount) > 0).map((c: any, i: number) => {
+                  const value = c.type === 'percent' ? breakdown.taxable * (Number(c.amount) / 100) : Number(c.amount);
+                  return (
+                    <div key={i} className="flex justify-between">
+                      <span className="text-muted-foreground">{c.label}{c.type === 'percent' ? ` (${c.amount}%)` : ''}</span>
+                      <span>+{fmt(value)}</span>
+                    </div>
+                  );
+                })}
+                <div className="flex justify-between pt-1 border-t border-border font-semibold">
+                  <span>Effective total</span>
+                  <span className="text-primary">{fmt(breakdown.effective)}</span>
+                </div>
+              </div>
+            );
+          })()}
           {bid.signature && (
             <div className="col-span-2 rounded-md border border-border bg-muted/40 p-3 space-y-1">
               <div className="font-medium">Digitally signed (DSC)</div>
@@ -467,8 +502,8 @@ export default function BidDetailPage({ params }: { params: Promise<{ id: string
       </Card>
 
       {bid.lineItems?.length > 0 && (
-        <Card>
-          <CardHeader><CardTitle className="text-base">Line Items ({bid.currency})</CardTitle></CardHeader>
+        <Card className="glass card-3d border-0">
+          <CardHeader><CardTitle className="text-base font-[family-name:var(--font-heading)]">Line Items ({bid.currency})</CardTitle></CardHeader>
           <CardContent className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -481,14 +516,14 @@ export default function BidDetailPage({ params }: { params: Promise<{ id: string
                   <th className="pb-2 font-medium text-right">Total line item price ({bid.currency})</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border dark:divide-border">
+              <tbody className="divide-y divide-border divide-border">
                 {bid.lineItems.map((item: any, i: number) => (
                   <tr key={i}>
                     <td className="py-2 align-top">
                       <div>{item.description}</div>
                       {item.notes && <div className="text-xs text-muted-foreground mt-1 whitespace-pre-wrap">Remarks: {item.notes}</div>}
                       {item.originalQuantity != null && Number(item.quantity) !== Number(item.originalQuantity) && item.quantityChangeReason && (
-                        <div className="text-xs text-amber-700 dark:text-amber-400 mt-1 whitespace-pre-wrap">Qty change: {item.quantityChangeReason}</div>
+                        <div className="text-xs text-primary mt-1 whitespace-pre-wrap">Qty change: {item.quantityChangeReason}</div>
                       )}
                       {item.customFields?.length > 0 && (
                         <div className="mt-1 space-y-0.5">
@@ -519,9 +554,9 @@ export default function BidDetailPage({ params }: { params: Promise<{ id: string
       )}
 
       {(bid.clauseResponses?.length > 0 || bid.tender?.clauses?.length > 0) && (
-        <Card>
+        <Card className="glass card-3d border-0">
           <CardHeader>
-            <CardTitle className="text-base">Terms response</CardTitle>
+            <CardTitle className="text-base font-[family-name:var(--font-heading)]">Terms response</CardTitle>
             <p className="text-xs text-muted-foreground mt-1">Edited wording is shown in red so the company and supplier can see every change.</p>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -543,7 +578,7 @@ export default function BidDetailPage({ params }: { params: Promise<{ id: string
                       <ClauseDiffText original={original} proposed={proposed} />
                     </div>
                   ) : (
-                    <p className="text-sm text-foreground dark:text-muted-foreground whitespace-pre-wrap">{original}</p>
+                    <p className="text-sm text-foreground whitespace-pre-wrap">{original}</p>
                   )}
                 </div>
               );
@@ -553,21 +588,21 @@ export default function BidDetailPage({ params }: { params: Promise<{ id: string
       )}
 
       {bid.technicalProposal && (
-        <Card><CardHeader><CardTitle className="text-base">Technical Proposal</CardTitle></CardHeader><CardContent><p className="text-sm text-foreground dark:text-muted-foreground whitespace-pre-wrap">{bid.technicalProposal}</p></CardContent></Card>
+        <Card className="glass card-3d border-0"><CardHeader><CardTitle className="text-base font-[family-name:var(--font-heading)]">Technical Proposal</CardTitle></CardHeader><CardContent><p className="text-sm text-foreground whitespace-pre-wrap">{bid.technicalProposal}</p></CardContent></Card>
       )}
       {bid.commercialProposal && (
-        <Card><CardHeader><CardTitle className="text-base">Commercial Proposal</CardTitle></CardHeader><CardContent><p className="text-sm text-foreground dark:text-muted-foreground whitespace-pre-wrap">{bid.commercialProposal}</p></CardContent></Card>
+        <Card className="glass card-3d border-0"><CardHeader><CardTitle className="text-base font-[family-name:var(--font-heading)]">Commercial Proposal</CardTitle></CardHeader><CardContent><p className="text-sm text-foreground whitespace-pre-wrap">{bid.commercialProposal}</p></CardContent></Card>
       )}
 
       {/* History */}
       {bid.history?.length > 0 && (
-        <Card>
-          <CardHeader><CardTitle className="text-base">Bid History</CardTitle></CardHeader>
+        <Card className="glass card-3d border-0">
+          <CardHeader><CardTitle className="text-base font-[family-name:var(--font-heading)]">Bid History</CardTitle></CardHeader>
           <CardContent className="space-y-2">
             {bid.history.map((h: any, i: number) => (
               <div key={i} className="flex items-center gap-2 text-xs text-muted-foreground">
                 <div className="w-1.5 h-1.5 rounded-full bg-muted/70 shrink-0" />
-                <span className="font-medium text-foreground dark:text-muted-foreground">{h.fieldName}</span>
+                <span className="font-medium text-foreground">{h.fieldName}</span>
                 <span>changed from <span className="font-mono">{h.oldValue || "—"}</span> to <span className="font-mono">{h.newValue}</span></span>
                 <span>by {h.changedBy}</span>
                 <span className="ml-auto">{formatDistanceToNow(new Date(h.createdAt), { addSuffix: true })}</span>
@@ -578,8 +613,8 @@ export default function BidDetailPage({ params }: { params: Promise<{ id: string
       )}
 
       {bid.versions?.length > 0 && (
-        <Card>
-          <CardHeader><CardTitle className="text-base">Original and revised versions</CardTitle></CardHeader>
+        <Card className="glass card-3d border-0">
+          <CardHeader><CardTitle className="text-base font-[family-name:var(--font-heading)]">Original and revised versions</CardTitle></CardHeader>
           <CardContent className="space-y-3">
             {bid.versions.map((v: any) => (
               <div key={`${v.kind}-${v.version}`} className="rounded-lg border border-border p-3 text-sm">

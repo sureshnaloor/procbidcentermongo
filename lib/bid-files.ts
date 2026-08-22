@@ -6,6 +6,7 @@ import { isSafeStoredName, mimeForExtension } from '@/lib/tender-files';
 const BID_FILE_MAX_BYTES = 20 * 1024 * 1024;
 const SIGNATURE_ALLOWED = new Set(['pdf', 'p7s', 'p7b', 'sig']);
 const OFFER_DOC_ALLOWED = new Set(['pdf', 'png', 'jpg', 'jpeg', 'webp']);
+const WORKBOOK_ALLOWED = new Set(['xlsx', 'xls']);
 
 export const BID_UPLOAD_DIR = path.resolve(process.cwd(), 'uploads', 'bids');
 
@@ -61,6 +62,29 @@ export async function saveBidOfferDocumentFile(
   }
   if (buffer.byteLength > BID_FILE_MAX_BYTES) {
     throw new Error('Signed offer exceeds the 20 MB limit');
+  }
+  const storedName = `${nanoid(16)}.${ext}`;
+  await mkdir(BID_UPLOAD_DIR, { recursive: true });
+  await writeFile(getBidUploadPath(storedName), buffer);
+  return {
+    storedName,
+    fileUrl: `/api/files/bids/${storedName}`,
+    fileSize: buffer.byteLength,
+    ext,
+  };
+}
+
+export async function saveBidWorkbookFile(
+  fileName: string,
+  fileBase64: string
+): Promise<{ storedName: string; fileUrl: string; fileSize: number; ext: string }> {
+  const buffer = decodeBase64(fileBase64);
+  const ext = path.extname(fileName).toLowerCase().replace('.', '');
+  if (!WORKBOOK_ALLOWED.has(ext)) {
+    throw new Error('Upload the filled Excel workbook (.xlsx, .xls)');
+  }
+  if (buffer.byteLength > BID_FILE_MAX_BYTES) {
+    throw new Error('Workbook exceeds the 20 MB limit');
   }
   const storedName = `${nanoid(16)}.${ext}`;
   await mkdir(BID_UPLOAD_DIR, { recursive: true });

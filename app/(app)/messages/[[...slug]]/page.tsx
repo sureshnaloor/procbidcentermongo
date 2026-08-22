@@ -176,10 +176,10 @@ export default function MessagesPage({ params }: { params: Promise<{ slug?: stri
   const directoryLabel = contactType === "company" ? "Companies" : contactType === "vendor" ? "Suppliers" : "Contacts";
 
   return (
-    <div className="flex h-[calc(100vh-8rem)] gap-4">
-      <div className="w-72 shrink-0 space-y-4 overflow-y-auto">
-        <div>
-          <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Channels</h3>
+    <div className="flex h-[calc(100vh-8rem)] gap-4 animate-fade-in-up">
+      <div className="w-72 shrink-0 space-y-4 overflow-y-auto pr-1">
+        <div className="glass rounded-2xl p-3 border-0">
+          <h3 className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-2 px-1">Channels</h3>
           {loadingChannels ? (
             <div className="flex items-center gap-2 px-2 py-2 text-xs text-muted-foreground">
               <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading...
@@ -188,13 +188,18 @@ export default function MessagesPage({ params }: { params: Promise<{ slug?: stri
             <div className="space-y-0.5">
               {(channels as any[]).map((c: any) => {
                 const Icon = CHANNEL_ICONS[c.kind] ?? Hash;
+                const active = isChannel && targetId === c._id;
                 return (
                   <Link
                     key={c._id}
                     href={`/messages/channel/${c._id}`}
-                    className={`flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm transition-colors hover:bg-muted dark:hover:bg-accent ${isChannel && targetId === c._id ? "bg-primary/5 text-primary dark:bg-primary/20 dark:text-primary" : "text-foreground dark:text-muted-foreground"}`}
+                    className={`flex items-center gap-2 px-2.5 py-2 rounded-xl text-sm font-medium transition-all ${
+                      active
+                        ? "bg-primary/10 text-primary shadow-[0_0_14px_-6px_rgba(200,90,58,0.3)]"
+                        : "text-foreground hover:bg-accent"
+                    }`}
                   >
-                    <Icon className="h-3.5 w-3.5 shrink-0" />
+                    <Icon className={`h-3.5 w-3.5 shrink-0 ${active ? "text-primary" : "text-muted-foreground"}`} />
                     <span className="truncate">{c.name}</span>
                   </Link>
                 );
@@ -204,18 +209,18 @@ export default function MessagesPage({ params }: { params: Promise<{ slug?: stri
         </div>
 
         {contactType && (
-          <div>
-            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Direct Messages</h3>
+          <div className="glass rounded-2xl p-3 border-0">
+            <h3 className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-2 px-1">Direct Messages</h3>
             <p className="text-[11px] text-muted-foreground px-1 mb-2">
               {contactType === "company" ? "Message any registered EPC company." : "Message any registered supplier."}
             </p>
             <div className="relative mb-2">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
               <Input
                 value={contactSearch}
                 onChange={(e) => setContactSearch(e.target.value)}
                 placeholder={`Search ${directoryLabel.toLowerCase()}...`}
-                className="h-8 pl-8 text-xs"
+                className="h-9 pl-9 text-xs rounded-xl"
                 id="dm-contact-search"
               />
             </div>
@@ -230,18 +235,23 @@ export default function MessagesPage({ params }: { params: Promise<{ slug?: stri
                 {directory.map((p: any) => {
                   const id = String(p._id);
                   const conv = conversationByPartner.get(id);
+                  const active = isDM && targetId === id;
                   return (
                     <Link
                       key={id}
                       href={`/messages/dm/${id}`}
-                      className={`flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm transition-colors hover:bg-muted dark:hover:bg-accent ${isDM && targetId === id ? "bg-primary/5 text-primary dark:bg-primary/20 dark:text-primary" : "text-foreground dark:text-muted-foreground"}`}
+                      className={`flex items-center gap-2 px-2.5 py-2 rounded-xl text-sm font-medium transition-all ${
+                        active
+                          ? "bg-primary/10 text-primary shadow-[0_0_14px_-6px_rgba(200,90,58,0.3)]"
+                          : "text-foreground hover:bg-accent"
+                      }`}
                     >
-                      <div className="w-6 h-6 rounded-full bg-muted dark:bg-muted shrink-0 flex items-center justify-center text-[10px] font-semibold">
+                      <div className="w-7 h-7 rounded-full bg-muted shrink-0 flex items-center justify-center text-[10px] font-bold">
                         {p.companyName?.[0] ?? "?"}
                       </div>
                       <span className="truncate flex-1">{p.companyName ?? "Unknown"}</span>
                       {conv?.unreadCount > 0 && (
-                        <span className="ml-auto bg-primary text-white text-[10px] rounded-full px-1.5 py-0.5">{conv.unreadCount}</span>
+                        <span className="ml-auto bg-primary text-primary-foreground text-[10px] rounded-full px-1.5 py-0.5 font-bold">{conv.unreadCount}</span>
                       )}
                     </Link>
                   );
@@ -252,12 +262,14 @@ export default function MessagesPage({ params }: { params: Promise<{ slug?: stri
         )}
       </div>
 
-      <div className="flex-1 flex flex-col min-w-0 border border-border rounded-xl overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0 border border-border rounded-2xl overflow-hidden bg-card/50 backdrop-blur-sm shadow-[var(--shadow-card)]">
         {!targetId ? (
           <div className="flex-1 flex items-center justify-center">
             <div className="text-center px-6">
-              <MessageSquare className="h-10 w-10 text-muted-foreground/60 mx-auto mb-3" />
-              <p className="text-muted-foreground">Select a channel or start a direct message</p>
+              <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mx-auto mb-4">
+                <MessageSquare className="h-8 w-8 text-muted-foreground" />
+              </div>
+              <p className="text-muted-foreground font-medium">Select a channel or start a direct message</p>
               <p className="text-xs text-muted-foreground mt-1">
                 {contactType === "vendor"
                   ? "Suppliers can message any registered EPC company."
@@ -270,13 +282,13 @@ export default function MessagesPage({ params }: { params: Promise<{ slug?: stri
         ) : (
           <>
             {activeChannel && (
-              <div className="border-b border-border px-4 py-3">
+              <div className="border-b border-border px-5 py-3 bg-muted/30">
                 <div className="flex items-center gap-2">
                   {(() => {
                     const Icon = CHANNEL_ICONS[activeChannel.kind] ?? Hash;
-                    return <Icon className="h-4 w-4 text-muted-foreground" />;
+                    return <Icon className="h-4 w-4 text-primary" />;
                   })()}
-                  <h2 className="font-semibold text-sm text-foreground">{activeChannel.name}</h2>
+                  <h2 className="font-semibold text-sm text-foreground font-[family-name:var(--font-heading)]">{activeChannel.name}</h2>
                 </div>
                 {activeChannel.description && (
                   <p className="text-xs text-muted-foreground mt-0.5">{activeChannel.description}</p>
@@ -284,10 +296,10 @@ export default function MessagesPage({ params }: { params: Promise<{ slug?: stri
               </div>
             )}
             {isDM && (
-              <div className="border-b border-border px-4 py-3">
+              <div className="border-b border-border px-5 py-3 bg-muted/30">
                 <div className="flex items-center gap-2">
-                  <MessageSquare className="h-4 w-4 text-muted-foreground" />
-                  <h2 className="font-semibold text-sm text-foreground">{dmPartner?.companyName || "Direct message"}</h2>
+                  <MessageSquare className="h-4 w-4 text-primary" />
+                  <h2 className="font-semibold text-sm text-foreground font-[family-name:var(--font-heading)]">{dmPartner?.companyName || "Direct message"}</h2>
                 </div>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   {[dmPartner?.city, dmPartner?.country].filter(Boolean).join(", ") || "Private conversation"}
@@ -304,7 +316,7 @@ export default function MessagesPage({ params }: { params: Promise<{ slug?: stri
                     const typeLabel = typeKey && PROCUREMENT_TYPES[typeKey] ? PROCUREMENT_TYPES[typeKey].label : "Package";
                     const draft = packageDrafts[pkg.id] ?? "";
                     return (
-                      <div key={pkg.id} className="rounded-xl border border-border bg-card overflow-hidden">
+                      <div key={pkg.id} className="rounded-2xl border border-border bg-card overflow-hidden shadow-sm">
                         <div className="px-4 py-2.5 border-b border-border bg-muted/40 flex items-center justify-between gap-2">
                           <div className="min-w-0">
                             <div className="flex items-center gap-2">
@@ -315,7 +327,7 @@ export default function MessagesPage({ params }: { params: Promise<{ slug?: stri
                             </div>
                             <div className="text-sm font-semibold text-foreground truncate mt-0.5">
                               {pkg.id !== "unknown" ? (
-                                <Link href={`/tenders/${pkg.id}`} className="hover:text-primary">
+                                <Link href={`/tenders/${pkg.id}`} className="hover:text-primary transition-colors">
                                   {pkg.tender?.title || "Package conversation"}
                                 </Link>
                               ) : (
@@ -341,12 +353,12 @@ export default function MessagesPage({ params }: { params: Promise<{ slug?: stri
                                 }
                               }}
                               placeholder={`Reply on this ${typeLabel}...`}
-                              className="h-8 text-xs"
+                              className="h-9 text-xs rounded-xl"
                               id={`package-msg-${pkg.id}`}
                             />
                             <Button
                               size="icon"
-                              className="h-8 w-8"
+                              className="h-9 w-9 rounded-xl"
                               disabled={!draft.trim() || sendMutation.isPending}
                               onClick={() => sendMutation.mutate({ tenderId: pkg.id, content: draft })}
                             >
@@ -358,9 +370,9 @@ export default function MessagesPage({ params }: { params: Promise<{ slug?: stri
                     );
                   })}
 
-                  <div className="rounded-xl border border-border bg-card overflow-hidden">
+                  <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-sm">
                     <div className="px-4 py-2.5 border-b border-border bg-muted/40">
-                      <div className="text-sm font-semibold text-foreground">Direct messages</div>
+                      <div className="text-sm font-semibold text-foreground font-[family-name:var(--font-heading)]">Direct messages</div>
                       <p className="text-[11px] text-muted-foreground">Not tied to an RFQ, RFP, or tender.</p>
                     </div>
                     <div className="p-3 space-y-3 min-h-[4.5rem]">
@@ -382,17 +394,17 @@ export default function MessagesPage({ params }: { params: Promise<{ slug?: stri
                 ))
               )}
             </div>
-            <div className="border-t border-border p-3 flex gap-2">
+            <div className="border-t border-border p-3 flex gap-2 bg-muted/30">
               <Input
                 value={newMsg}
                 onChange={(e) => setNewMsg(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && newMsg.trim() && canPost) sendMutation.mutate({}); }}
                 placeholder={isDM ? `General message to ${dmPartner?.companyName || "this contact"}...` : placeholder}
                 id="message-input"
-                className="flex-1"
+                className="flex-1 rounded-xl"
                 disabled={!canPost}
               />
-              <Button size="icon" onClick={() => sendMutation.mutate({})} disabled={!canPost || !newMsg.trim() || sendMutation.isPending} id="send-message-btn">
+              <Button size="icon" className="rounded-xl" onClick={() => sendMutation.mutate({})} disabled={!canPost || !newMsg.trim() || sendMutation.isPending} id="send-message-btn">
                 <Send className="h-4 w-4" />
               </Button>
             </div>
@@ -407,8 +419,8 @@ function DirectMessageRow({ message: m, fallback }: { message: any; fallback: st
   if (m.isSystem) {
     return (
       <div className="py-1">
-        <p className="text-sm text-teal-700 dark:text-teal-400 whitespace-pre-wrap">{m.content}</p>
-        <p className="text-xs text-teal-700/70 dark:text-teal-400/70 mt-0.5">
+        <p className="text-sm text-primary whitespace-pre-wrap">{m.content}</p>
+        <p className="text-xs text-primary/70 mt-0.5">
           {formatDistanceToNow(new Date(m.createdAt), { addSuffix: true })}
         </p>
       </div>
@@ -416,15 +428,15 @@ function DirectMessageRow({ message: m, fallback }: { message: any; fallback: st
   }
   return (
     <div className="flex gap-3">
-      <div className="w-7 h-7 rounded-full bg-primary/10 dark:bg-primary/20 flex items-center justify-center text-xs font-semibold text-primary shrink-0">
+      <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary shrink-0">
         {m.sender?.companyName?.[0] ?? fallback}
       </div>
       <div>
         <div className="flex items-baseline gap-2">
-          <span className="text-xs font-semibold text-foreground">{m.sender?.companyName ?? "Administrator"}</span>
+          <span className="text-xs font-bold text-foreground">{m.sender?.companyName ?? "Administrator"}</span>
           <span className="text-xs text-muted-foreground">{formatDistanceToNow(new Date(m.createdAt), { addSuffix: true })}</span>
         </div>
-        <p className="text-sm text-foreground dark:text-muted-foreground mt-0.5 whitespace-pre-wrap">{m.content}</p>
+        <p className="text-sm text-foreground mt-0.5 whitespace-pre-wrap">{m.content}</p>
       </div>
     </div>
   );

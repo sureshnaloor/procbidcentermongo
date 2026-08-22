@@ -37,18 +37,21 @@ export default function NewBidPage({ params }: { params: Promise<{ tenderId: str
     else router.replace(`/bids/${existing._id}`);
   }, [tender, router]);
 
-  if (isLoading) return <div className="flex items-center justify-center py-16"><Loader2 className="animate-spin h-6 w-6 text-muted-foreground" /></div>;
-  if (!tender) return <div className="text-center py-16 text-muted-foreground" />;
+  if (isLoading) return <div className="flex items-center justify-center py-16 animate-fade-in-up"><Loader2 className="animate-spin h-6 w-6 text-muted-foreground" /></div>;
+  if (!tender) return <div className="text-center py-16 text-muted-foreground animate-fade-in-up" />;
   if (profile && profile.userType === "vendor" && !tender.participation?.canPrepareOffer) {
     return (
-      <div className="text-center py-16 space-y-2">
+      <div className="text-center py-16 space-y-2 animate-fade-in-up">
+        <div className="mx-auto w-fit rounded-full bg-muted p-3 mb-3">
+          <Loader2 className="h-6 w-6 text-muted-foreground" />
+        </div>
         <p className="text-muted-foreground">You can prepare an offer only after the company invites you or accepts your request.</p>
-        <Link href={`/tenders/${tenderId}`} className="text-sm text-primary hover:underline">Back to tender</Link>
+        <Link href={`/tenders/${tenderId}`} className="text-sm text-primary hover:text-primary/80 link-underline font-semibold">Back to tender</Link>
       </div>
     );
   }
   if (tender.myBid?._id) {
-    return <div className="flex items-center justify-center py-16"><Loader2 className="animate-spin h-6 w-6 text-muted-foreground" /></div>;
+    return <div className="flex items-center justify-center py-16 animate-fade-in-up"><Loader2 className="animate-spin h-6 w-6 text-muted-foreground" /></div>;
   }
 
   return <BidForm mode="create" tender={tender} />;
