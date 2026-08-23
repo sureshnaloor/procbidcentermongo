@@ -21,6 +21,6 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ ten
   const isOwner = profile?.userType === 'company' && profile._id!.toString() === tender.companyProfileId.toString();
   if (!isAdmin && !isOwner) return NextResponse.json({ error: 'Access denied' }, { status: 403 });
 
-  const buffer = buildOfflineBidWorkbook(tender);
+  const buffer = await buildOfflineBidWorkbook(tender);
   return xlsxResponse(buffer, `offline-offer-${tender.title}.xlsx`);
 }

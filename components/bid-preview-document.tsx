@@ -61,7 +61,7 @@ export function BidPreviewDocument({ bid }: { bid: any }) {
                 <tr><td className="py-1 pr-4 text-black/60">VAT / tax ({bid.vatPercent}%)</td><td className="py-1">+{money(commercial.vat, currency)}</td></tr>
               )}
               {(bid.otherCharges ?? []).filter((c: any) => Number(c.amount) > 0).map((c: any, i: number) => {
-                const value = c.type === 'percent' ? commercial.taxable * (Number(c.amount) / 100) : Number(c.amount);
+                const value = c.type === 'percent' ? commercial.baseAfterTax * (Number(c.amount) / 100) : Number(c.amount);
                 return (
                   <tr key={i}>
                     <td className="py-1 pr-4 text-black/60">{c.label}{c.type === 'percent' ? ` (${c.amount}%)` : ''}</td>

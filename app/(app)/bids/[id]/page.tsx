@@ -437,7 +437,7 @@ export default function BidDetailPage({ params }: { params: Promise<{ id: string
                   </div>
                 )}
                 {(bid.otherCharges ?? []).filter((c: any) => Number(c.amount) > 0).map((c: any, i: number) => {
-                  const value = c.type === 'percent' ? breakdown.taxable * (Number(c.amount) / 100) : Number(c.amount);
+                  const value = c.type === 'percent' ? breakdown.baseAfterTax * (Number(c.amount) / 100) : Number(c.amount);
                   return (
                     <div key={i} className="flex justify-between">
                       <span className="text-muted-foreground">{c.label}{c.type === 'percent' ? ` (${c.amount}%)` : ''}</span>
