@@ -46,3 +46,5 @@ testoxalpha.ts
 
 /uploads/tenders/*
 !/uploads/tenders/.gitkeep
+
+sales_deck.md
