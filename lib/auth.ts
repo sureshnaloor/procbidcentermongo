@@ -23,25 +23,30 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         const password = credentials?.password as string;
         if (!username || !password) return null;
 
-        const { users, profiles } = await collections();
-        const user = await users.findOne({ username });
-        if (!user) return null;
+        try {
+          const { users, profiles } = await collections();
+          const user = await users.findOne({ username });
+          if (!user) return null;
 
-        const valid = await bcrypt.compare(password, user.passwordHash);
-        if (!valid) return null;
+          const valid = await bcrypt.compare(password, user.passwordHash);
+          if (!valid) return null;
 
-        const profile = await profiles.findOne({ userId: user._id });
-        const superadminUsername = process.env.SUPERADMIN_USERNAME ?? '';
-        return {
-          id: user._id!.toString(),
-          name: user.displayName || user.username,
-          email: user.email,
-          username: user.username,
-          displayName: user.displayName || user.username,
-          role: user.role,
-          isSuperAdmin: superadminUsername !== '' && user.username === superadminUsername,
-          userType: profile?.userType ?? null,
-        };
+          const profile = await profiles.findOne({ userId: user._id });
+          const superadminUsername = process.env.SUPERADMIN_USERNAME ?? '';
+          return {
+            id: user._id!.toString(),
+            name: user.displayName || user.username,
+            email: user.email,
+            username: user.username,
+            displayName: user.displayName || user.username,
+            role: user.role,
+            isSuperAdmin: superadminUsername !== '' && user.username === superadminUsername,
+            userType: profile?.userType ?? null,
+          };
+        } catch (err) {
+          console.error('[auth] Sign-in failed while reaching the database:', err);
+          throw err;
+        }
       },
     }),
   ],
