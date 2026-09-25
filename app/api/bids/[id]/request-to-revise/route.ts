@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { ObjectId } from 'mongodb';
 import { z } from 'zod';
 import { collections } from '@/lib/db';
-import { requireAuth, isNextResponse, requireVendorProfile } from '@/lib/auth-helpers';
+import { requireAuth, isNextResponse, requireVendorProfile, requireVerifiedVendorProfile } from '@/lib/auth-helpers';
 import { buildRevisionRequest, revisionIsPending, VENDOR_CAN_REQUEST_REVISION_STATUSES } from '@/lib/bid-revision';
 import { notify } from '@/lib/notify';
 import { postOfferThreadSystemMessage, systemMessageText } from '@/lib/offer-thread-system';
@@ -10,7 +10,7 @@ import { postOfferThreadSystemMessage, systemMessageText } from '@/lib/offer-thr
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAuth();
   if (isNextResponse(auth)) return auth;
-  const vendor = await requireVendorProfile(auth);
+  const vendor = await requireVerifiedVendorProfile(auth);
   if (isNextResponse(vendor)) return vendor;
   const { id } = await params;
   if (!ObjectId.isValid(id)) return NextResponse.json({ error: 'Invalid id' }, { status: 400 });

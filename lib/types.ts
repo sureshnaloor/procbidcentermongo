@@ -7,7 +7,7 @@ export interface IUser {
   email: string;
   passwordHash: string;
   displayName?: string;
-  role: 'user' | 'admin';
+  role: 'user' | 'admin' | 'company' | 'vendor';
   createdAt: Date;
   updatedAt?: Date;
 }
@@ -16,7 +16,7 @@ export interface IUser {
 export interface IProfile {
   _id?: ObjectId;
   userId: ObjectId;
-  userType: 'company' | 'vendor';
+  userType: 'company' | 'vendor' | 'admin';
   companyName?: string;
   registrationNumber?: string;
   contactPerson?: string;
@@ -141,6 +141,15 @@ export interface ITender {
   description?: string;
   type: TenderType;
   status: TenderStatus;
+  statusRemarks?: string;
+  awardedToVendorId?: ObjectId;
+  awardedVendorName?: string;
+  awardedBidId?: ObjectId;
+  awardedAmount?: number;
+  awardedCurrency?: string;
+  awardedAt?: Date;
+  closedAt?: Date;
+  cancelledAt?: Date;
   bidDeadline?: Date;
   deliveryDeadline?: Date;
   estimatedValue?: number;

@@ -90,10 +90,34 @@ export default function AdminPage() {
                       </div>
                       <div className="flex items-center gap-2">
                         {u.isVerified ? (
-                          <Badge variant="success" className="flex items-center gap-1"><Shield className="h-3 w-3" />Verified</Badge>
+                          <div className="flex items-center gap-1.5">
+                            <Badge variant="success" className="flex items-center gap-1"><Shield className="h-3 w-3" />Verified</Badge>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-xs text-muted-foreground hover:text-amber-600 dark:hover:text-amber-400 h-7 px-2"
+                              title="Revoke verification"
+                              id={`unverify-${u._id}`}
+                              disabled={verifyMutation.isPending}
+                              onClick={() => {
+                                if (confirm(`Revoke verification for ${u.companyName || u.user?.username}? They will be restricted to read-only access.`)) {
+                                  verifyMutation.mutate({ id: u._id, isVerified: false });
+                                }
+                              }}
+                            >
+                              Revoke
+                            </Button>
+                          </div>
                         ) : (
-                          <Button size="sm" variant="outline" id={`verify-${u._id}`} onClick={() => verifyMutation.mutate({ id: u._id, isVerified: true })}>
-                            <UserCheck className="h-4 w-4" />Verify
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="border-primary/40 hover:bg-primary/10 text-primary font-medium"
+                            id={`verify-${u._id}`}
+                            disabled={verifyMutation.isPending}
+                            onClick={() => verifyMutation.mutate({ id: u._id, isVerified: true })}
+                          >
+                            <UserCheck className="h-4 w-4 mr-1" />Verify
                           </Button>
                         )}
                         <Button size="sm" variant="ghost" onClick={() => { if (confirm("Delete this user?")) deleteUserMutation.mutate(u._id); }} id={`delete-user-${u._id}`}>

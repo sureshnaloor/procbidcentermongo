@@ -2,13 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { ObjectId } from 'mongodb';
 import { z } from 'zod';
 import { collections } from '@/lib/db';
-import { requireAuth, isNextResponse, getProfileForUser } from '@/lib/auth-helpers';
+import { requireAuth, isNextResponse, getProfileForUser, ensureProfileForUser, isSuperAdminUsername } from '@/lib/auth-helpers';
 import { notify } from '@/lib/notify';
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ profileId: string }> }) {
   const auth = await requireAuth();
   if (isNextResponse(auth)) return auth;
-  const profile = await getProfileForUser(auth.user.id);
+  let profile = await getProfileForUser(auth.user.id);
+  if (!profile && (auth.user.role === 'admin' || auth.user.isSuperAdmin)) {
+    profile = await ensureProfileForUser(auth.user);
+  }
   if (!profile) return NextResponse.json([]);
   const { profileId } = await params;
   if (!ObjectId.isValid(profileId)) return NextResponse.json([]);
@@ -60,19 +63,25 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ pro
 export async function POST(req: NextRequest, { params }: { params: Promise<{ profileId: string }> }) {
   const auth = await requireAuth();
   if (isNextResponse(auth)) return auth;
-  const profile = await getProfileForUser(auth.user.id);
+  let profile = await getProfileForUser(auth.user.id);
+  if (!profile && (auth.user.role === 'admin' || auth.user.isSuperAdmin)) {
+    profile = await ensureProfileForUser(auth.user);
+  }
   if (!profile) return NextResponse.json({ error: 'Profile required' }, { status: 403 });
   const { profileId } = await params;
   if (!ObjectId.isValid(profileId)) return NextResponse.json({ error: 'Invalid profile id' }, { status: 400 });
 
-  const { profiles, messages } = await collections();
+  const { profiles, messages, users } = await collections();
   const other = await profiles.findOne({ _id: new ObjectId(profileId) });
   if (!other) return NextResponse.json({ error: 'Recipient not found' }, { status: 404 });
 
+  const otherUser = await users.findOne({ _id: other.userId });
+  const isAdminSender = auth.user.role === 'admin' || auth.user.isSuperAdmin || profile.userType === 'admin';
+  const isAdminRecipient = other.userType === 'admin' || otherUser?.role === 'admin' || isSuperAdminUsername(otherUser?.username ?? '');
   const companyToVendor = profile.userType === 'company' && other.userType === 'vendor';
   const vendorToCompany = profile.userType === 'vendor' && other.userType === 'company';
-  if (!companyToVendor && !vendorToCompany) {
-    return NextResponse.json({ error: 'Messages are only allowed between EPC company and supplier' }, { status: 403 });
+  if (!isAdminSender && !isAdminRecipient && !companyToVendor && !vendorToCompany) {
+    return NextResponse.json({ error: 'Messages are only allowed between EPC company, supplier, or administrator' }, { status: 403 });
   }
   if (profile._id!.toString() === other._id!.toString()) {
     return NextResponse.json({ error: 'Cannot message yourself' }, { status: 400 });

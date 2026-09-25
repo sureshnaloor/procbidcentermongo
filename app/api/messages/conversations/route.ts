@@ -1,12 +1,15 @@
 import { NextResponse } from 'next/server';
 import { ObjectId } from 'mongodb';
 import { collections } from '@/lib/db';
-import { requireAuth, isNextResponse, getProfileForUser } from '@/lib/auth-helpers';
+import { requireAuth, isNextResponse, getProfileForUser, ensureProfileForUser } from '@/lib/auth-helpers';
 
 export async function GET() {
   const auth = await requireAuth();
   if (isNextResponse(auth)) return auth;
-  const profile = await getProfileForUser(auth.user.id);
+  let profile = await getProfileForUser(auth.user.id);
+  if (!profile && (auth.user.role === 'admin' || auth.user.isSuperAdmin)) {
+    profile = await ensureProfileForUser(auth.user);
+  }
   if (!profile) return NextResponse.json([]);
 
   const { messages, profiles } = await collections();

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { ObjectId } from 'mongodb';
 import { collections } from '@/lib/db';
-import { requireAuth, getProfileForUser, isNextResponse } from '@/lib/auth-helpers';
+import { requireAuth, getProfileForUser, ensureProfileForUser, isNextResponse } from '@/lib/auth-helpers';
 
 const createSchema = z.object({
   userType: z.enum(['company', 'vendor']),
@@ -21,7 +21,10 @@ const createSchema = z.object({
 export async function GET() {
   const auth = await requireAuth();
   if (isNextResponse(auth)) return auth;
-  const profile = await getProfileForUser(auth.user.id);
+  let profile = await getProfileForUser(auth.user.id);
+  if (!profile && (auth.user.role === 'admin' || auth.user.isSuperAdmin)) {
+    profile = await ensureProfileForUser(auth.user);
+  }
   return NextResponse.json(profile);
 }
 

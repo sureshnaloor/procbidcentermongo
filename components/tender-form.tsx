@@ -81,6 +81,7 @@ export function TenderForm({ mode, tender }: TenderFormProps) {
     location: "",
     requirements: "",
     termsConditions: "",
+    statusRemarks: "",
     groupIds: [] as string[],
   });
 
@@ -128,6 +129,7 @@ export function TenderForm({ mode, tender }: TenderFormProps) {
         location: tender.location || "",
         requirements: tender.requirements || "",
         termsConditions: tender.termsConditions || "",
+        statusRemarks: tender.statusRemarks || "",
         groupIds: Array.isArray(tender.groupIds) ? tender.groupIds.map((g: any) => String(g)) : [],
       });
       setFileCategory(defaultDocumentCategory(nextType));
@@ -874,6 +876,28 @@ export function TenderForm({ mode, tender }: TenderFormProps) {
           ))}
         </CardContent>
       </Card>
+
+      {mode === "edit" && (
+        <Card className="glass border-0">
+          <CardContent className="pt-6 space-y-4">
+            <div>
+              <h3 className="font-semibold text-sm text-foreground">Remarks & Notes</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">Additional outcome notes, closure/cancellation remarks, or package notes</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="status-remarks">Remarks</Label>
+              <Textarea
+                id="status-remarks"
+                value={form.statusRemarks}
+                onChange={(e) => setField("statusRemarks", e.target.value)}
+                placeholder="Remarks or notes..."
+                rows={3}
+                className="resize-none text-sm"
+              />
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card className="glass border-0">
         <CardContent className="pt-6 space-y-4">

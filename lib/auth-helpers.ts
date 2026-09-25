@@ -10,9 +10,9 @@ export type AuthSession = {
     username: string;
     displayName: string;
     email: string;
-    role: 'user' | 'admin';
+    role: 'user' | 'admin' | 'company' | 'vendor';
     isSuperAdmin: boolean;
-    userType?: 'company' | 'vendor' | null;
+    userType?: 'company' | 'vendor' | 'admin' | null;
   };
 };
 
@@ -64,6 +64,35 @@ export async function getProfileForUser(userId: string): Promise<IProfile | null
   return profiles.findOne({ userId: new ObjectId(userId) }) as Promise<IProfile | null>;
 }
 
+export async function ensureProfileForUser(user: {
+  id: string;
+  username: string;
+  displayName?: string;
+  email?: string;
+  role?: string;
+  isSuperAdmin?: boolean;
+}): Promise<IProfile> {
+  const { profiles } = await collections();
+  let profile = await profiles.findOne({ userId: new ObjectId(user.id) });
+  if (!profile) {
+    const now = new Date();
+    const isAdmin = user.role === 'admin' || user.isSuperAdmin;
+    const userType = isAdmin ? 'admin' : (user.role === 'company' || user.role === 'vendor' ? user.role : 'company');
+    const doc: IProfile = {
+      userId: new ObjectId(user.id),
+      userType: userType as any,
+      companyName: isAdmin ? (user.isSuperAdmin ? 'Super Admin' : 'Admin') : (user.displayName || user.username),
+      contactPerson: user.displayName || user.username,
+      isVerified: isAdmin ? true : false,
+      createdAt: now,
+      updatedAt: now,
+    };
+    const res = await profiles.insertOne(doc);
+    profile = { ...doc, _id: res.insertedId };
+  }
+  return profile;
+}
+
 export async function requireCompanyProfile(
   session: AuthSession
 ): Promise<IProfile | NextResponse> {
@@ -73,12 +102,34 @@ export async function requireCompanyProfile(
   return profile;
 }
 
+export async function requireVerifiedCompanyProfile(
+  session: AuthSession
+): Promise<IProfile | NextResponse> {
+  const profile = await requireCompanyProfile(session);
+  if (isNextResponse(profile)) return profile;
+  if (!profile.isVerified) {
+    return forbidden('Account verification required. Your account is pending Superadmin verification before you can create or publish tenders.');
+  }
+  return profile;
+}
+
 export async function requireVendorProfile(
   session: AuthSession
 ): Promise<IProfile | NextResponse> {
   const profile = await getProfileForUser(session.user.id);
   if (!profile) return forbidden('Vendor profile required');
   if (profile.userType !== 'vendor') return forbidden('Supplier/Vendor access required');
+  return profile;
+}
+
+export async function requireVerifiedVendorProfile(
+  session: AuthSession
+): Promise<IProfile | NextResponse> {
+  const profile = await requireVendorProfile(session);
+  if (isNextResponse(profile)) return profile;
+  if (!profile.isVerified) {
+    return forbidden('Account verification required. Your account is pending Superadmin verification before you can participate in bids.');
+  }
   return profile;
 }
 

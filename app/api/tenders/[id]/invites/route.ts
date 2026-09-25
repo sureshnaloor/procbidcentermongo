@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { ObjectId } from 'mongodb';
 import { z } from 'zod';
 import { collections } from '@/lib/db';
-import { requireAuth, isNextResponse, getProfileForUser, requireCompanyProfile, requireVendorProfile } from '@/lib/auth-helpers';
+import { requireAuth, isNextResponse, getProfileForUser, requireCompanyProfile, requireVendorProfile, requireVerifiedCompanyProfile, requireVerifiedVendorProfile } from '@/lib/auth-helpers';
 import { notify } from '@/lib/notify';
 import { isOfferAuthorized } from '@/lib/tender-access';
 import { createOfferAccessToken, ensureInviteAccessToken, isVendorBlacklisted } from '@/lib/offer-link';
@@ -74,7 +74,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const now = new Date();
 
   if (data.action === 'invite') {
-    const company = await requireCompanyProfile(auth);
+    const company = await requireVerifiedCompanyProfile(auth);
     if (isNextResponse(company)) return company;
     if (company._id!.toString() !== tender.companyProfileId.toString()) {
       return NextResponse.json({ error: 'Only the company that created this tender can invite suppliers' }, { status: 403 });
@@ -123,7 +123,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json(invite, { status: existing ? 200 : 201 });
   }
 
-  const vendor = await requireVendorProfile(auth);
+  const vendor = await requireVerifiedVendorProfile(auth);
   if (isNextResponse(vendor)) return vendor;
   if (await isVendorBlacklisted(tender.companyProfileId, vendor._id!)) {
     return NextResponse.json({ error: 'You cannot request to offer on this package' }, { status: 403 });

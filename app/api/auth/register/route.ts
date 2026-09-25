@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
       email: data.email,
       passwordHash,
       displayName: data.displayName || data.username,
-      role: 'user',
+      role: data.userType,
       createdAt: now,
       updatedAt: now,
     });

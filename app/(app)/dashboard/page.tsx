@@ -129,12 +129,28 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent className="p-0">
             <div className="divide-y divide-border">
-              {notifications.slice(0, 5).map((n: any) => (
-                <div key={n._id} className={`px-6 py-3.5 ${!n.isRead ? "bg-primary/[0.04]" : ""}`}>
-                  <div className="font-semibold text-sm text-foreground">{n.title}</div>
-                  {n.content && <div className="text-xs text-muted-foreground mt-0.5">{n.content}</div>}
-                </div>
-              ))}
+              {notifications.slice(0, 5).map((n: any) => {
+                const targetUrl = n.type === "message_received"
+                  ? (n.relatedId ? `/messages/dm/${n.relatedId}` : "/messages")
+                  : n.relatedType === "tender" && n.relatedId
+                  ? `/tenders/${n.relatedId}`
+                  : n.relatedType === "bid" && n.relatedId
+                  ? `/bids/${n.relatedId}`
+                  : "/messages";
+                return (
+                  <Link
+                    key={n._id}
+                    href={targetUrl}
+                    className={`block px-6 py-3.5 hover:bg-muted/40 transition-colors ${!n.isRead ? "bg-primary/[0.04]" : ""}`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="font-semibold text-sm text-foreground">{n.title}</div>
+                      <ChevronRight className="h-4 w-4 text-muted-foreground/40 shrink-0" />
+                    </div>
+                    {n.content && <div className="text-xs text-muted-foreground mt-0.5">{n.content}</div>}
+                  </Link>
+                );
+              })}
             </div>
           </CardContent>
         </Card>

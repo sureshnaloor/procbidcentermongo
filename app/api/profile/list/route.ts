@@ -9,13 +9,16 @@ export async function GET(req: NextRequest) {
   if (isNextResponse(auth)) return auth;
   const { searchParams } = req.nextUrl;
   const userType = searchParams.get('userType') as IProfile['userType'] | null;
+  const includeAdmin = searchParams.get('includeAdmin') === 'true';
   const search = searchParams.get('search') ?? '';
   const limit = Math.min(parseInt(searchParams.get('limit') ?? '20'), 100);
   const offset = parseInt(searchParams.get('offset') ?? '0');
 
   const { profiles, documents, materialServiceGroups, materialServiceTypes } = await collections();
   const filter: Filter<IProfile> = {};
-  if (userType) filter.userType = userType;
+  if (userType) {
+    filter.userType = includeAdmin ? ({ $in: [userType, 'admin'] } as any) : userType;
+  }
   if (search) {
     filter.$or = [
       { companyName: { $regex: search, $options: 'i' } },

@@ -10,16 +10,21 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Edit, Trash2, FileText, CalendarClock, MapPin, DollarSign, Users, Loader2, ExternalLink, Plus, AlertCircle, Copy, Pencil, Download, Ship } from "lucide-react";
+import { Edit, Trash2, FileText, CalendarClock, MapPin, DollarSign, Users, Loader2, ExternalLink, Plus, AlertCircle, Copy, Pencil, Download, Ship, Trophy, XCircle, CheckCircle2 } from "lucide-react";
 import { format } from "date-fns";
 import { documentCategoryLabel, getPublishDateIssues, PROCUREMENT_TYPES } from "@/lib/procurement";
 import { incotermLabel } from "@/lib/incoterms";
 import { OfferThreadPanel, type ThreadVendorOption } from "@/components/offer-thread-panel";
 import { PublishConfirmDialog } from "@/components/publish-confirm-dialog";
+import { CloseTenderDialog, CancelTenderDialog, AwardTenderDialog, EditRemarksDialog } from "@/components/tender-status-dialogs";
 import { downloadBoqFile } from "@/lib/boq-browser";
 
 const STATUS_COLORS: Record<string, "default" | "secondary" | "destructive" | "outline" | "success" | "warning"> = {
   draft: "secondary", published: "success", closed: "outline", awarded: "default", cancelled: "destructive",
+};
+
+const STATUS_LABELS: Record<string, string> = {
+  draft: "Draft", published: "Published", closed: "Closed (External Award)", awarded: "Awarded", cancelled: "Cancelled",
 };
 
 export default function TenderDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -30,6 +35,10 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
   const router = useRouter();
   const qc = useQueryClient();
   const [publishOpen, setPublishOpen] = useState(false);
+  const [closeOpen, setCloseOpen] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [awardOpen, setAwardOpen] = useState(false);
+  const [editRemarksOpen, setEditRemarksOpen] = useState(false);
   const [threadVendorId, setThreadVendorId] = useState<string>("");
 
   const { data: tender, isLoading } = useQuery({ queryKey: ["tender", id], queryFn: () => fetch(`/api/tenders/${id}`).then((r) => r.json()) });
@@ -57,17 +66,40 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
   });
 
   const updateStatusMutation = useMutation({
-    mutationFn: async (status: string) => {
-      const res = await fetch(`/api/tenders/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }) });
+    mutationFn: async (payload: {
+      status?: string;
+      statusRemarks?: string;
+      awardedToVendorId?: string;
+      awardedVendorName?: string;
+      awardedBidId?: string;
+      awardedAmount?: number;
+      awardedCurrency?: string;
+    } | string) => {
+      const body = typeof payload === "string" ? { status: payload } : payload;
+      const res = await fetch(`/api/tenders/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to update status");
       return data;
     },
-    onSuccess: (_data, status) => {
+    onSuccess: (_data, variables) => {
       setPublishOpen(false);
-      toast.success(status === "published" ? "Package published" : "Status updated");
+      setCloseOpen(false);
+      setCancelOpen(false);
+      setAwardOpen(false);
+      setEditRemarksOpen(false);
+      const st = typeof variables === "string" ? variables : variables.status;
+      if (st === "published") toast.success("Package published");
+      else if (st === "awarded") toast.success("Tender marked as awarded");
+      else if (st === "closed") toast.success("Tender closed (external award recorded)");
+      else if (st === "cancelled") toast.success("Tender cancelled");
+      else toast.success("Tender updated");
       qc.invalidateQueries({ queryKey: ["tender", id] });
       qc.invalidateQueries({ queryKey: ["tenders"] });
+      qc.invalidateQueries({ queryKey: ["bids", "by-tender", id] });
     },
     onError: (err: Error) => toast.error(err.message),
   });
@@ -215,33 +247,40 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
       )}
 
       {isVendor && !biddingClosed && (
-        <div className="flex flex-wrap gap-3 items-center">
-          {tender.myBid?.status === "draft" ? (
-            <Link href={`/bids/${tender.myBid._id}/edit`}>
-              <Button id="modify-offer-btn"><Pencil /> Modify Offer</Button>
-            </Link>
-          ) : tender.myBid?._id ? (
-            <Link href={`/bids/${tender.myBid._id}`}>
-              <Button variant="outline" id="view-offer-btn">View Offer</Button>
-            </Link>
-          ) : canPrepareOffer ? (
-            <Link href={`/bids/new/${id}`}>
-              <Button id="submit-bid-btn"><Plus /> Prepare Offer</Button>
-            </Link>
-          ) : participation.status === "requested" ? (
-            <Badge variant="warning">Waiting for company approval</Badge>
-          ) : participation.status === "declined" || participation.status === "revoked" ? (
-            <div className="flex items-center gap-2">
-              <Badge variant="destructive">Participation not approved</Badge>
-              <Button variant="outline" size="sm" onClick={() => requestMutation.mutate()} disabled={requestMutation.isPending}>Request again</Button>
-            </div>
-          ) : (
-            <Button variant="outline" id="request-invite-btn" onClick={() => requestMutation.mutate()} disabled={requestMutation.isPending}>
-              {requestMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-              Request to prepare offer
-            </Button>
-          )}
-        </div>
+        !profile?.isVerified ? (
+          <div className="flex items-center gap-2 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-800 dark:text-amber-300">
+            <Badge variant="warning">Verification Required</Badge>
+            <span>Your supplier account is pending Super Admin verification before you can request participation or submit bids.</span>
+          </div>
+        ) : (
+          <div className="flex flex-wrap gap-3 items-center">
+            {tender.myBid?.status === "draft" ? (
+              <Link href={`/bids/${tender.myBid._id}/edit`}>
+                <Button id="modify-offer-btn"><Pencil /> Modify Offer</Button>
+              </Link>
+            ) : tender.myBid?._id ? (
+              <Link href={`/bids/${tender.myBid._id}`}>
+                <Button variant="outline" id="view-offer-btn">View Offer</Button>
+              </Link>
+            ) : canPrepareOffer ? (
+              <Link href={`/bids/new/${id}`}>
+                <Button id="submit-bid-btn"><Plus /> Prepare Offer</Button>
+              </Link>
+            ) : participation.status === "requested" ? (
+              <Badge variant="warning">Waiting for company approval</Badge>
+            ) : participation.status === "declined" || participation.status === "revoked" ? (
+              <div className="flex items-center gap-2">
+                <Badge variant="destructive">Participation not approved</Badge>
+                <Button variant="outline" size="sm" onClick={() => requestMutation.mutate()} disabled={requestMutation.isPending}>Request again</Button>
+              </div>
+            ) : (
+              <Button variant="outline" id="request-invite-btn" onClick={() => requestMutation.mutate()} disabled={requestMutation.isPending}>
+                {requestMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                Request to prepare offer
+              </Button>
+            )}
+          </div>
+        )
       )}
 
       {isOwner && tender.status === "draft" && (
@@ -252,7 +291,9 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
               <div className="font-medium text-foreground">This {PROCUREMENT_TYPES[tender.type as keyof typeof PROCUREMENT_TYPES]?.label ?? "package"} is a draft</div>
               <p className="text-muted-foreground mt-0.5">
                 Suppliers cannot see it until you publish.
-                {(tender.publishBlockers as string[] | undefined)?.length
+                {!profile?.isVerified
+                  ? " Note: Your account is pending Super Admin verification before you can publish."
+                  : (tender.publishBlockers as string[] | undefined)?.length
                   ? ` ${((tender.publishBlockers as string[])[0])}`
                   : " It is ready to publish."}
               </p>
@@ -263,7 +304,8 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
               size="sm"
               id="publish-tender-btn"
               onClick={() => setPublishOpen(true)}
-              disabled={updateStatusMutation.isPending || tender.canPublish === false}
+              disabled={updateStatusMutation.isPending || tender.canPublish === false || !profile?.isVerified}
+              title={!profile?.isVerified ? "Super Admin verification required" : undefined}
             >
               {updateStatusMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               Publish
@@ -275,11 +317,88 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
         </div>
       )}
 
+      {/* Concluded Package Outcome Banner */}
+      {["closed", "awarded", "cancelled"].includes(tender.status) && (
+        <div className={`p-4 rounded-xl border space-y-2 ${
+          tender.status === "awarded"
+            ? "bg-primary/10 border-primary/30"
+            : tender.status === "cancelled"
+            ? "bg-destructive/10 border-destructive/30"
+            : "bg-muted/30 border-border"
+        }`}>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                {tender.status === "awarded" && <Trophy className="h-4 w-4 text-amber-500" />}
+                {tender.status === "closed" && <AlertCircle className="h-4 w-4 text-blue-500" />}
+                {tender.status === "cancelled" && <XCircle className="h-4 w-4 text-destructive" />}
+                Package Outcome: {STATUS_LABELS[tender.status] ?? tender.status}
+              </div>
+              {tender.status === "awarded" && (
+                <div className="text-base font-semibold text-foreground mt-1">
+                  Awarded to: <span className="text-primary font-bold">{tender.awardedVendorName || "Awarded Bidder"}</span>
+                  {tender.awardedAmount != null && (
+                    <span className="ml-2 font-mono">
+                      ({tender.awardedCurrency || tender.currency} {Number(tender.awardedAmount).toLocaleString()})
+                    </span>
+                  )}
+                </div>
+              )}
+              {tender.statusRemarks && (
+                <div className="text-xs text-foreground/90 mt-2 bg-background/60 p-3 rounded-lg border border-border/40">
+                  <span className="font-semibold text-muted-foreground block text-[11px] mb-0.5">Remarks / Reason:</span>
+                  {tender.statusRemarks}
+                </div>
+              )}
+              {!tender.statusRemarks && (
+                <p className="text-xs text-muted-foreground italic mt-1">No remarks recorded for this status.</p>
+              )}
+            </div>
+
+            {isOwner && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="shrink-0 text-xs gap-1"
+                onClick={() => setEditRemarksOpen(true)}
+                id="edit-remarks-btn"
+              >
+                <Pencil className="h-3.5 w-3.5" /> Edit Remarks
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+
       {isOwner && tender.status === "published" && (
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => updateStatusMutation.mutate("closed")} id="close-tender-btn">Close Tender</Button>
-          <Button variant="outline" size="sm" onClick={() => updateStatusMutation.mutate("awarded")} id="award-tender-btn">Mark Awarded</Button>
-          <Button variant="outline" size="sm" onClick={() => updateStatusMutation.mutate("cancelled")} id="cancel-tender-btn">Cancel</Button>
+        <div className="flex flex-wrap gap-2 items-center">
+          <Button
+            variant="default"
+            size="sm"
+            onClick={() => setAwardOpen(true)}
+            id="award-tender-btn"
+            className="gap-1.5"
+          >
+            <Trophy className="h-4 w-4" /> Mark Awarded
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCloseOpen(true)}
+            id="close-tender-btn"
+            className="gap-1.5"
+          >
+            <AlertCircle className="h-4 w-4 text-amber-500" /> Close Tender (External Award)
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCancelOpen(true)}
+            id="cancel-tender-btn"
+            className="gap-1.5 text-destructive hover:text-destructive"
+          >
+            <XCircle className="h-4 w-4" /> Cancel Tender
+          </Button>
         </div>
       )}
 
@@ -522,6 +641,39 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
           </TabsContent>
         )}
       </Tabs>
+
+      <CloseTenderDialog
+        open={closeOpen}
+        onOpenChange={setCloseOpen}
+        tenderTitle={tender.title}
+        isPending={updateStatusMutation.isPending}
+        onConfirm={(remarks) => updateStatusMutation.mutate({ status: "closed", statusRemarks: remarks })}
+      />
+
+      <CancelTenderDialog
+        open={cancelOpen}
+        onOpenChange={setCancelOpen}
+        tenderTitle={tender.title}
+        isPending={updateStatusMutation.isPending}
+        onConfirm={(remarks) => updateStatusMutation.mutate({ status: "cancelled", statusRemarks: remarks })}
+      />
+
+      <AwardTenderDialog
+        open={awardOpen}
+        onOpenChange={setAwardOpen}
+        tender={tender}
+        bids={bids as any[]}
+        isPending={updateStatusMutation.isPending}
+        onConfirm={(payload) => updateStatusMutation.mutate({ status: "awarded", ...payload })}
+      />
+
+      <EditRemarksDialog
+        open={editRemarksOpen}
+        onOpenChange={setEditRemarksOpen}
+        tender={tender}
+        isPending={updateStatusMutation.isPending}
+        onSave={(remarks) => updateStatusMutation.mutate({ statusRemarks: remarks })}
+      />
 
       <PublishConfirmDialog
         open={publishOpen}

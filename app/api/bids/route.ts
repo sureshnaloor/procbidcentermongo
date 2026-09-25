@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { ObjectId } from 'mongodb';
 import { z } from 'zod';
 import { collections } from '@/lib/db';
-import { requireAuth, isNextResponse, requireVendorProfile } from '@/lib/auth-helpers';
+import { requireAuth, isNextResponse, requireVendorProfile, requireVerifiedVendorProfile } from '@/lib/auth-helpers';
 import { assertVendorCanOffer, isBidDeadlineOpen } from '@/lib/tender-access';
 import { bidLineItemInput, lineItemsTotal, normalizeStoredLineItem, resolvedBidTotal } from '@/lib/bid-line';
 
@@ -73,7 +73,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const auth = await requireAuth();
   if (isNextResponse(auth)) return auth;
-  const vendor = await requireVendorProfile(auth);
+  const vendor = await requireVerifiedVendorProfile(auth);
   if (isNextResponse(vendor)) return vendor;
 
   const body = await req.json();

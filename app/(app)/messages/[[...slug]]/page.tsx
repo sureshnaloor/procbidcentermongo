@@ -7,7 +7,7 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, Send, MessageSquare, Hash, Info, Megaphone, AlertTriangle, Search } from "lucide-react";
+import { Loader2, Send, MessageSquare, Hash, Info, Megaphone, AlertTriangle, Search, Shield } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { PROCUREMENT_TYPES } from "@/lib/procurement";
@@ -85,10 +85,16 @@ export default function MessagesPage({ params }: { params: Promise<{ slug?: stri
     return { general, packages };
   }, [messages]);
 
-  const contactType = profile?.userType === "vendor" ? "company" : profile?.userType === "company" ? "vendor" : null;
+  const isAdmin = user?.role === "admin" || user?.isSuperAdmin;
+  const contactType = isAdmin ? "all" : profile?.userType === "vendor" ? "company" : profile?.userType === "company" ? "vendor" : null;
   const { data: contactsData, isLoading: loadingContacts } = useQuery({
     queryKey: ["dm-contacts", contactType],
-    queryFn: () => fetch(`/api/profile/list?userType=${contactType}&limit=100`).then((r) => r.json()),
+    queryFn: () => {
+      const url = contactType === "all"
+        ? "/api/profile/list?limit=100"
+        : `/api/profile/list?userType=${contactType}&includeAdmin=true&limit=100`;
+      return fetch(url).then((r) => r.json());
+    },
     enabled: !!contactType,
   });
 
@@ -109,11 +115,25 @@ export default function MessagesPage({ params }: { params: Promise<{ slug?: stri
     const items = (contactsData?.items ?? []) as any[];
     const myId = profile?._id ? String(profile._id) : "";
     const q = contactSearch.trim().toLowerCase();
-    return items
+
+    // Combined map: include conversation partners and contacts list
+    const combinedMap = new Map<string, any>();
+    for (const c of conversations as any[]) {
+      if (c.partner && String(c.partner._id) !== myId) {
+        combinedMap.set(String(c.partner._id), c.partner);
+      }
+    }
+    for (const p of items) {
+      if (p && String(p._id) !== myId && !combinedMap.has(String(p._id))) {
+        combinedMap.set(String(p._id), p);
+      }
+    }
+
+    return [...combinedMap.values()]
       .filter((p) => String(p._id) !== myId)
       .filter((p) => {
         if (!q) return true;
-        const hay = `${p.companyName ?? ""} ${p.city ?? ""} ${p.country ?? ""} ${p.contactPerson ?? ""}`.toLowerCase();
+        const hay = `${p.companyName ?? ""} ${p.city ?? ""} ${p.country ?? ""} ${p.contactPerson ?? ""} ${p.userType ?? ""}`.toLowerCase();
         return hay.includes(q);
       })
       .sort((a, b) => {
@@ -123,9 +143,11 @@ export default function MessagesPage({ params }: { params: Promise<{ slug?: stri
         const aHas = conversationByPartner.has(String(a._id)) ? 1 : 0;
         const bHas = conversationByPartner.has(String(b._id)) ? 1 : 0;
         if (aHas !== bHas) return bHas - aHas;
+        if (a.userType === "admin" && b.userType !== "admin") return -1;
+        if (b.userType === "admin" && a.userType !== "admin") return 1;
         return String(a.companyName ?? "").localeCompare(String(b.companyName ?? ""));
       });
-  }, [contactsData, profile, contactSearch, conversationByPartner]);
+  }, [contactsData, conversations, profile, contactSearch, conversationByPartner]);
 
   const activeChannel = isChannel ? (channels as any[]).find((c: any) => c._id === targetId) : null;
   const canPost = !isChannel || channelCanPost(activeChannel?.kind, user?.role, profile?.userType);
@@ -173,7 +195,7 @@ export default function MessagesPage({ params }: { params: Promise<{ slug?: stri
     onError: (err: Error) => toast.error(err.message),
   });
 
-  const directoryLabel = contactType === "company" ? "Companies" : contactType === "vendor" ? "Suppliers" : "Contacts";
+  const directoryLabel = isAdmin ? "All Users" : contactType === "company" ? "Companies" : contactType === "vendor" ? "Suppliers" : "Contacts";
 
   return (
     <div className="flex h-[calc(100vh-8rem)] gap-4 animate-fade-in-up">
@@ -212,7 +234,11 @@ export default function MessagesPage({ params }: { params: Promise<{ slug?: stri
           <div className="glass rounded-2xl p-3 border-0">
             <h3 className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-2 px-1">Direct Messages</h3>
             <p className="text-[11px] text-muted-foreground px-1 mb-2">
-              {contactType === "company" ? "Message any registered EPC company." : "Message any registered supplier."}
+              {isAdmin
+                ? "Message any registered EPC company or supplier."
+                : contactType === "company"
+                ? "Message any registered EPC company."
+                : "Message any registered supplier."}
             </p>
             <div className="relative mb-2">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
@@ -246,10 +272,22 @@ export default function MessagesPage({ params }: { params: Promise<{ slug?: stri
                           : "text-foreground hover:bg-accent"
                       }`}
                     >
-                      <div className="w-7 h-7 rounded-full bg-muted shrink-0 flex items-center justify-center text-[10px] font-bold">
-                        {p.companyName?.[0] ?? "?"}
+                      <div className={`w-7 h-7 rounded-full shrink-0 flex items-center justify-center text-[10px] font-bold ${
+                        p.userType === "admin" ? "bg-primary/20 text-primary" : "bg-muted text-foreground"
+                      }`}>
+                        {p.userType === "admin" ? <Shield className="h-3.5 w-3.5" /> : (p.companyName?.[0] ?? "?")}
                       </div>
-                      <span className="truncate flex-1">{p.companyName ?? "Unknown"}</span>
+                      <div className="min-w-0 flex-1 truncate">
+                        <div className="truncate text-xs font-semibold flex items-center gap-1.5">
+                          <span>{p.companyName ?? "Unknown"}</span>
+                          {p.userType === "admin" && (
+                            <Badge variant="warning" className="text-[9px] px-1 py-0 h-4 uppercase">Admin</Badge>
+                          )}
+                        </div>
+                        <div className="text-[10px] text-muted-foreground truncate">
+                          {p.userType === "admin" ? "Platform Administrator" : p.userType === "company" ? "EPC Company" : "Supplier"}
+                        </div>
+                      </div>
                       {conv?.unreadCount > 0 && (
                         <span className="ml-auto bg-primary text-primary-foreground text-[10px] rounded-full px-1.5 py-0.5 font-bold">{conv.unreadCount}</span>
                       )}
@@ -271,7 +309,9 @@ export default function MessagesPage({ params }: { params: Promise<{ slug?: stri
               </div>
               <p className="text-muted-foreground font-medium">Select a channel or start a direct message</p>
               <p className="text-xs text-muted-foreground mt-1">
-                {contactType === "vendor"
+                {isAdmin
+                  ? "Direct message any registered EPC company or supplier."
+                  : contactType === "vendor"
                   ? "Suppliers can message any registered EPC company."
                   : contactType === "company"
                     ? "Companies can message any registered supplier."
@@ -297,13 +337,22 @@ export default function MessagesPage({ params }: { params: Promise<{ slug?: stri
             )}
             {isDM && (
               <div className="border-b border-border px-5 py-3 bg-muted/30">
-                <div className="flex items-center gap-2">
-                  <MessageSquare className="h-4 w-4 text-primary" />
-                  <h2 className="font-semibold text-sm text-foreground font-[family-name:var(--font-heading)]">{dmPartner?.companyName || "Direct message"}</h2>
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <MessageSquare className="h-4 w-4 text-primary" />
+                      <h2 className="font-semibold text-sm text-foreground font-[family-name:var(--font-heading)]">{dmPartner?.companyName || "Direct message"}</h2>
+                      {dmPartner?.userType && (
+                        <Badge variant="outline" className="text-[10px] uppercase">
+                          {dmPartner.userType === "company" ? "EPC Company" : dmPartner.userType === "vendor" ? "Supplier" : "Admin"}
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {[dmPartner?.contactPerson, dmPartner?.city, dmPartner?.country].filter(Boolean).join(" · ") || "Private conversation"}
+                    </p>
+                  </div>
                 </div>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {[dmPartner?.city, dmPartner?.country].filter(Boolean).join(", ") || "Private conversation"}
-                </p>
               </div>
             )}
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
@@ -426,17 +475,24 @@ function DirectMessageRow({ message: m, fallback }: { message: any; fallback: st
       </div>
     );
   }
+  const isSenderAdmin = m.sender?.userType === "admin";
+  const senderName = isSenderAdmin ? (m.sender?.companyName || "Super Admin") : (m.sender?.companyName ?? "User");
   return (
     <div className="flex gap-3">
-      <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary shrink-0">
-        {m.sender?.companyName?.[0] ?? fallback}
+      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
+        isSenderAdmin ? "bg-primary/20 text-primary" : "bg-muted text-foreground"
+      }`}>
+        {isSenderAdmin ? <Shield className="h-4 w-4" /> : (m.sender?.companyName?.[0] ?? fallback)}
       </div>
-      <div>
+      <div className="flex-1 min-w-0">
         <div className="flex items-baseline gap-2">
-          <span className="text-xs font-bold text-foreground">{m.sender?.companyName ?? "Administrator"}</span>
+          <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
+            {senderName}
+            {isSenderAdmin && <Badge variant="warning" className="text-[9px] px-1 py-0 h-4 uppercase">Admin</Badge>}
+          </span>
           <span className="text-xs text-muted-foreground">{formatDistanceToNow(new Date(m.createdAt), { addSuffix: true })}</span>
         </div>
-        <p className="text-sm text-foreground mt-0.5 whitespace-pre-wrap">{m.content}</p>
+        <p className="text-sm text-foreground mt-0.5 whitespace-pre-wrap break-words">{m.content}</p>
       </div>
     </div>
   );

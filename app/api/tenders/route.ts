@@ -3,7 +3,7 @@ import { ObjectId } from 'mongodb';
 import { z } from 'zod';
 import { collections } from '@/lib/db';
 import {
-  getSession, requireAuth, isNextResponse, getProfileForUser, requireCompanyProfile
+  getSession, requireAuth, isNextResponse, getProfileForUser, requireCompanyProfile, requireVerifiedCompanyProfile
 } from '@/lib/auth-helpers';
 import { saveTenderDocumentFile, TENDER_FILE_MAX_COUNT, TENDER_FILE_MAX_TOTAL_BYTES } from '@/lib/tender-files';
 import { normalizeTenderClauses } from '@/lib/clauses';
@@ -115,52 +115,145 @@ export async function GET(req: NextRequest) {
     tenders.countDocuments(filter),
   ]);
 
-  if (!profile || profile.userType !== 'vendor' || items.length === 0) {
-    return NextResponse.json({ items, total });
+  if (items.length === 0) {
+    return NextResponse.json({ items: [], total: 0 });
   }
 
   const tenderIds = items.map((t) => t._id!);
-  const companyIds = [...new Set(items.map((t) => t.companyProfileId.toString()))].map((id) => new ObjectId(id));
-  const [companies, invites, ownBids] = await Promise.all([
-    companyIds.length ? profiles.find({ _id: { $in: companyIds } }).toArray() : Promise.resolve([]),
-    tenderInvites.find({ vendorProfileId: profile._id!, tenderId: { $in: tenderIds } }).toArray(),
-    bids.find({ vendorProfileId: profile._id!, tenderId: { $in: tenderIds } }).sort({ createdAt: -1 }).toArray(),
+
+  // Vendor view enrichment
+  if (profile?.userType === 'vendor') {
+    const companyIds = [...new Set(items.map((t) => t.companyProfileId.toString()))].map((id) => new ObjectId(id));
+    const [companies, invites, ownBids] = await Promise.all([
+      companyIds.length ? profiles.find({ _id: { $in: companyIds } }).toArray() : Promise.resolve([]),
+      tenderInvites.find({ vendorProfileId: profile._id!, tenderId: { $in: tenderIds } }).toArray(),
+      bids.find({ vendorProfileId: profile._id!, tenderId: { $in: tenderIds } }).sort({ createdAt: -1 }).toArray(),
+    ]);
+    const companyById = new Map(companies.map((c) => [c._id!.toString(), {
+      _id: c._id,
+      companyName: c.companyName,
+      city: c.city,
+      country: c.country,
+    }]));
+    const inviteByTender = new Map(invites.map((i) => [i.tenderId.toString(), i]));
+    const bidsByTender = new Map<string, typeof ownBids>();
+    for (const bid of ownBids) {
+      const key = bid.tenderId.toString();
+      const list = bidsByTender.get(key) ?? [];
+      list.push(bid);
+      bidsByTender.set(key, list);
+    }
+
+    const enriched = items.map((tender) => {
+      const invite = inviteByTender.get(tender._id!.toString());
+      const myBids = bidsByTender.get(tender._id!.toString()) ?? [];
+      return {
+        ...tender,
+        company: companyById.get(tender.companyProfileId.toString()) ?? null,
+        participation: invite
+          ? { status: invite.status, canPrepareOffer: isOfferAuthorized(invite.status) && myBids.length === 0 }
+          : { status: null, canPrepareOffer: false },
+        myBids: myBids.map((b) => ({ ...b, totalPrice: resolvedBidTotal(b) })),
+      };
+    });
+
+    return NextResponse.json({ items: enriched, total });
+  }
+
+  // Company and Admin view enrichment: include bids summary, invites, and offline bids info
+  const { offlineInvites } = await collections();
+  const [allBids, allInvites, allOfflineInvites] = await Promise.all([
+    bids.find({ tenderId: { $in: tenderIds } }).sort({ createdAt: -1 }).toArray(),
+    tenderInvites.find({ tenderId: { $in: tenderIds } }).sort({ createdAt: -1 }).toArray(),
+    offlineInvites.find({ tenderId: { $in: tenderIds } }).sort({ createdAt: -1 }).toArray(),
   ]);
-  const companyById = new Map(companies.map((c) => [c._id!.toString(), {
-    _id: c._id,
-    companyName: c.companyName,
-    city: c.city,
-    country: c.country,
+
+  const vendorProfileIds = [...new Set([
+    ...allBids.map((b) => b.vendorProfileId?.toString()).filter(Boolean),
+    ...allInvites.map((i) => i.vendorProfileId?.toString()).filter(Boolean),
+  ])].map((id) => new ObjectId(id));
+
+  const vendorProfiles = vendorProfileIds.length > 0
+    ? await profiles.find({ _id: { $in: vendorProfileIds } }).toArray()
+    : [];
+  const vendorMap = new Map(vendorProfiles.map((v) => [v._id!.toString(), {
+    _id: v._id,
+    companyName: v.companyName,
+    contactPerson: v.contactPerson,
+    email: v.userId ? undefined : undefined,
+    city: v.city,
+    country: v.country,
   }]));
-  const inviteByTender = new Map(invites.map((i) => [i.tenderId.toString(), i]));
-  const bidsByTender = new Map<string, typeof ownBids>();
-  for (const bid of ownBids) {
-    const key = bid.tenderId.toString();
+
+  const bidsByTender = new Map<string, any[]>();
+  for (const b of allBids) {
+    const key = b.tenderId.toString();
     const list = bidsByTender.get(key) ?? [];
-    list.push(bid);
+    list.push({
+      _id: b._id,
+      vendorProfileId: b.vendorProfileId,
+      status: b.status,
+      totalPrice: resolvedBidTotal(b),
+      currency: b.currency,
+      isOffline: b.isOffline,
+      offlineSupplier: b.offlineSupplier,
+      submittedAt: b.submittedAt,
+      createdAt: b.createdAt,
+      vendor: b.vendorProfileId ? vendorMap.get(b.vendorProfileId.toString()) : null,
+    });
     bidsByTender.set(key, list);
   }
 
-  const enriched = items.map((tender) => {
-    const invite = inviteByTender.get(tender._id!.toString());
-    const myBids = bidsByTender.get(tender._id!.toString()) ?? [];
+  const invitesByTender = new Map<string, any[]>();
+  for (const inv of allInvites) {
+    const key = inv.tenderId.toString();
+    const list = invitesByTender.get(key) ?? [];
+    list.push({
+      _id: inv._id,
+      vendorProfileId: inv.vendorProfileId,
+      status: inv.status,
+      createdAt: inv.createdAt,
+      vendor: vendorMap.get(inv.vendorProfileId.toString()) ?? null,
+    });
+    invitesByTender.set(key, list);
+  }
+
+  const offlineInvitesByTender = new Map<string, any[]>();
+  for (const off of allOfflineInvites) {
+    const key = off.tenderId.toString();
+    const list = offlineInvitesByTender.get(key) ?? [];
+    list.push({
+      _id: off._id,
+      supplierName: off.supplierName,
+      email: off.email,
+      status: off.status,
+      note: off.note,
+      createdAt: off.createdAt,
+    });
+    offlineInvitesByTender.set(key, list);
+  }
+
+  const enrichedForCompany = items.map((tender) => {
+    const tBids = bidsByTender.get(tender._id!.toString()) ?? [];
+    const tInvites = invitesByTender.get(tender._id!.toString()) ?? [];
+    const tOffline = offlineInvitesByTender.get(tender._id!.toString()) ?? [];
     return {
       ...tender,
-      company: companyById.get(tender.companyProfileId.toString()) ?? null,
-      participation: invite
-        ? { status: invite.status, canPrepareOffer: isOfferAuthorized(invite.status) && myBids.length === 0 }
-        : { status: null, canPrepareOffer: false },
-      myBids: myBids.map((b) => ({ ...b, totalPrice: resolvedBidTotal(b) })),
+      bids: tBids,
+      invites: tInvites,
+      offlineInvites: tOffline,
+      bidsCount: tBids.length,
+      invitesCount: tInvites.length,
     };
   });
 
-  return NextResponse.json({ items: enriched, total });
+  return NextResponse.json({ items: enrichedForCompany, total });
 }
 
 export async function POST(req: NextRequest) {
   const auth = await requireAuth();
   if (isNextResponse(auth)) return auth;
-  const profile = await requireCompanyProfile(auth);
+  const profile = await requireVerifiedCompanyProfile(auth);
   if (isNextResponse(profile)) return profile;
 
   const body = await req.json();

@@ -34,6 +34,10 @@ export async function GET() {
   const grouped = new Map<string, {
     tenderId: string;
     title: string;
+    status?: string;
+    type?: string;
+    bidDeadline?: string | Date;
+    createdAt?: string | Date;
     bidders: { bidId: string; vendorName: string; files: typeof visible[number]['signedOffers'] }[];
   }>();
   for (const bid of visible) {
@@ -42,6 +46,10 @@ export async function GET() {
     const group = grouped.get(key) ?? {
       tenderId: key,
       title: tender?.title || 'Package',
+      status: tender?.status,
+      type: tender?.type,
+      bidDeadline: tender?.bidDeadline,
+      createdAt: tender?.createdAt,
       bidders: [],
     };
     group.bidders.push({

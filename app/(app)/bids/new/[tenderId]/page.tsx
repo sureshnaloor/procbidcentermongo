@@ -39,6 +39,18 @@ export default function NewBidPage({ params }: { params: Promise<{ tenderId: str
 
   if (isLoading) return <div className="flex items-center justify-center py-16 animate-fade-in-up"><Loader2 className="animate-spin h-6 w-6 text-muted-foreground" /></div>;
   if (!tender) return <div className="text-center py-16 text-muted-foreground animate-fade-in-up" />;
+  if (profile && profile.userType === "vendor" && !profile.isVerified) {
+    return (
+      <div className="text-center py-16 space-y-3 max-w-md mx-auto animate-fade-in-up">
+        <div className="mx-auto w-fit rounded-full bg-amber-500/10 text-amber-600 p-3 mb-2">
+          <span className="text-2xl font-bold">⚠️</span>
+        </div>
+        <h2 className="text-xl font-bold">Verification Required</h2>
+        <p className="text-sm text-muted-foreground">Your supplier account is pending Super Admin verification before you can prepare or submit offers.</p>
+        <Link href={`/tenders/${tenderId}`} className="text-sm text-primary hover:text-primary/80 link-underline font-semibold inline-block pt-2">Back to tender</Link>
+      </div>
+    );
+  }
   if (profile && profile.userType === "vendor" && !tender.participation?.canPrepareOffer) {
     return (
       <div className="text-center py-16 space-y-2 animate-fade-in-up">

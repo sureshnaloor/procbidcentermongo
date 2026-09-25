@@ -21,6 +21,7 @@ import {
   Building2,
   Scale,
   FileSpreadsheet,
+  AlertTriangle,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -287,6 +288,18 @@ export default function AppShell({ session, children }: AppShellProps) {
             </div>
           </div>
         </header>
+
+        {/* Unverified Account Banner */}
+        {!isAdmin && profile && profile.isVerified === false && (
+          <div className="bg-amber-500/10 border-b border-amber-500/20 text-amber-800 dark:text-amber-300 px-6 py-2.5 text-xs flex items-center justify-between gap-3 shrink-0 print:hidden">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 shrink-0 text-amber-500" />
+              <span>
+                <strong>Account Pending Verification:</strong> Your account is currently under review by Super Admin. You have read-only access (you can view tenders, documents, and directory) but cannot create tenders or participate in bids until verified.
+              </span>
+            </div>
+          </div>
+        )}
 
         {/* Page children container */}
         <main className="flex-1 p-6 overflow-y-auto max-w-7xl w-full mx-auto print:p-0 print:max-w-none print:overflow-visible">{children}</main>

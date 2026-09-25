@@ -18,7 +18,11 @@ export async function getInvite(tenderId: ObjectId, vendorProfileId: ObjectId) {
 }
 
 export async function assertVendorCanOffer(tenderId: ObjectId, vendorProfileId: ObjectId) {
-  const { tenders } = await collections();
+  const { tenders, profiles } = await collections();
+  const vendor = await profiles.findOne({ _id: vendorProfileId });
+  if (!vendor || !vendor.isVerified) {
+    return { ok: false as const, error: 'Your account is pending Superadmin verification before you can participate in bids' };
+  }
   const tender = await tenders.findOne({ _id: tenderId });
   if (!tender) return { ok: false as const, error: 'Tender not found' };
   if (await isVendorBlacklisted(tender.companyProfileId, vendorProfileId)) {

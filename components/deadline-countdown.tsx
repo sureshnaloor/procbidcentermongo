@@ -6,7 +6,13 @@ function pad(n: number) {
   return String(n).padStart(2, "0");
 }
 
-export function DeadlineCountdown({ deadline }: { deadline: string | Date }) {
+export function DeadlineCountdown({
+  deadline,
+  className,
+}: {
+  deadline: string | Date;
+  className?: string;
+}) {
   const end = new Date(deadline).getTime();
   const [now, setNow] = useState(() => Date.now());
 
@@ -18,7 +24,7 @@ export function DeadlineCountdown({ deadline }: { deadline: string | Date }) {
   if (Number.isNaN(end)) return null;
   const ms = end - now;
   if (ms <= 0) {
-    return <span className="text-destructive font-medium tabular-nums">Deadline passed</span>;
+    return <span className={className || "text-destructive font-medium tabular-nums"}>Deadline passed</span>;
   }
 
   const days = Math.floor(ms / 86_400_000);
@@ -29,5 +35,5 @@ export function DeadlineCountdown({ deadline }: { deadline: string | Date }) {
     ? `${days}d ${pad(hours)}:${pad(mins)}:${pad(secs)} remaining`
     : `${pad(hours)}:${pad(mins)}:${pad(secs)} remaining`;
 
-  return <span className="text-destructive font-medium tabular-nums">{label}</span>;
+  return <span className={className || "text-destructive font-medium tabular-nums"}>{label}</span>;
 }

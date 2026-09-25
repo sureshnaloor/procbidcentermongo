@@ -18,26 +18,41 @@ export async function ensureSuperAdmin() {
 
   try {
     await ensureIndexes();
-    const { users } = await collections();
-    const existing = await users.findOne({ username });
-    if (existing) {
-      // Ensure it has admin role
-      if (existing.role !== 'admin') {
+    const { users, profiles } = await collections();
+    let user = await users.findOne({ username });
+    if (user) {
+      if (user.role !== 'admin') {
         await users.updateOne({ username }, { $set: { role: 'admin' } });
       }
-      return;
+    } else {
+      const passwordHash = await bcrypt.hash(password, 12);
+      const res = await users.insertOne({
+        username,
+        email,
+        passwordHash,
+        displayName: 'Super Admin',
+        role: 'admin',
+        createdAt: new Date(),
+      });
+      user = await users.findOne({ _id: res.insertedId });
+      console.log(`[seed] Super admin '${username}' created.`);
     }
 
-    const passwordHash = await bcrypt.hash(password, 12);
-    await users.insertOne({
-      username,
-      email,
-      passwordHash,
-      displayName: 'Super Admin',
-      role: 'admin',
-      createdAt: new Date(),
-    });
-    console.log(`[seed] Super admin '${username}' created.`);
+    if (user) {
+      const existingProfile = await profiles.findOne({ userId: user._id });
+      if (!existingProfile) {
+        const now = new Date();
+        await profiles.insertOne({
+          userId: user._id,
+          userType: 'admin',
+          companyName: 'Super Admin',
+          contactPerson: 'Super Admin',
+          isVerified: true,
+          createdAt: now,
+          updatedAt: now,
+        });
+      }
+    }
   } catch (err) {
     console.error('[seed] Failed to seed super admin:', err);
   }

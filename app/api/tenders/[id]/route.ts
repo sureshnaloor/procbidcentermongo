@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { ObjectId } from 'mongodb';
 import { z } from 'zod';
 import { collections } from '@/lib/db';
-import { requireAuth, isNextResponse, getProfileForUser, requireCompanyProfile } from '@/lib/auth-helpers';
+import { requireAuth, isNextResponse, getProfileForUser, requireCompanyProfile, requireVerifiedCompanyProfile } from '@/lib/auth-helpers';
 import { saveTenderDocumentFile } from '@/lib/tender-files';
 import { normalizeTenderClauses } from '@/lib/clauses';
 import { DOCUMENT_CATEGORY_VALUES, getPublishBlockers, getPublishDateIssues } from '@/lib/procurement';
@@ -128,7 +128,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAuth();
   if (isNextResponse(auth)) return auth;
-  const profile = await requireCompanyProfile(auth);
+  const profile = await requireVerifiedCompanyProfile(auth);
   if (isNextResponse(profile)) return profile;
   const { id } = await params;
   if (!ObjectId.isValid(id)) return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
@@ -155,6 +155,12 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     requirements: z.string().optional(),
     termsConditions: z.string().optional(),
     status: z.enum(['draft','published','closed','awarded','cancelled']).optional(),
+    statusRemarks: z.string().max(2000).optional(),
+    awardedToVendorId: z.string().optional(),
+    awardedVendorName: z.string().optional(),
+    awardedBidId: z.string().optional(),
+    awardedAmount: z.number().optional(),
+    awardedCurrency: z.string().optional(),
     groupIds: z.array(z.string()).optional(),
     clauses: z.array(z.object({
       kind: z.enum(['safety', 'quality', 'payment', 'delivery', 'compliance', 'scope', 'legal', 'custom']),
@@ -176,13 +182,23 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     return NextResponse.json({ error: 'A published package cannot be reverted to draft' }, { status: 400 });
   }
 
+  const allowedPostPublishKeys = new Set([
+    'status',
+    'statusRemarks',
+    'awardedToVendorId',
+    'awardedVendorName',
+    'awardedBidId',
+    'awardedAmount',
+    'awardedCurrency',
+    'bidDeadline',
+  ]);
   const publishing = data.status === 'published' && tender.status !== 'published';
   if (tender.status !== 'draft' && !publishing) {
     const extras = Object.keys(data).filter(
-      (k) => k !== 'status' && data[k as keyof typeof data] !== undefined
+      (k) => !allowedPostPublishKeys.has(k) && data[k as keyof typeof data] !== undefined
     );
     if (extras.length > 0) {
-      return NextResponse.json({ error: 'This package is published and can no longer be edited' }, { status: 400 });
+      return NextResponse.json({ error: 'This package is published and core fields can no longer be edited' }, { status: 400 });
     }
   }
 
@@ -206,7 +222,31 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   if (data.location !== undefined) setFields.location = data.location;
   if (data.requirements !== undefined) setFields.requirements = data.requirements;
   if (data.termsConditions !== undefined) setFields.termsConditions = data.termsConditions;
-  if (data.status) setFields.status = data.status;
+  if (data.status) {
+    setFields.status = data.status;
+    if (data.status === 'awarded') setFields.awardedAt = new Date();
+    if (data.status === 'closed') setFields.closedAt = new Date();
+    if (data.status === 'cancelled') setFields.cancelledAt = new Date();
+  }
+  if (data.statusRemarks !== undefined) setFields.statusRemarks = data.statusRemarks;
+  if (data.awardedToVendorId !== undefined) {
+    setFields.awardedToVendorId = data.awardedToVendorId && ObjectId.isValid(data.awardedToVendorId) ? new ObjectId(data.awardedToVendorId) : undefined;
+  }
+  if (data.awardedVendorName !== undefined) setFields.awardedVendorName = data.awardedVendorName;
+  if (data.awardedBidId !== undefined) {
+    setFields.awardedBidId = data.awardedBidId && ObjectId.isValid(data.awardedBidId) ? new ObjectId(data.awardedBidId) : undefined;
+  }
+  if (data.awardedAmount !== undefined) setFields.awardedAmount = data.awardedAmount;
+  if (data.awardedCurrency !== undefined) setFields.awardedCurrency = data.awardedCurrency;
+
+  if (data.status === 'awarded' && data.awardedBidId && ObjectId.isValid(data.awardedBidId)) {
+    const { bids } = await collections();
+    await bids.updateOne(
+      { _id: new ObjectId(data.awardedBidId), tenderId: new ObjectId(id) },
+      { $set: { status: 'accepted', updatedAt: new Date() } }
+    );
+  }
+
   if (data.groupIds) setFields.groupIds = data.groupIds.map((gid) => new ObjectId(gid));
   if (data.clauses) setFields.clauses = normalizeTenderClauses(data.clauses);
   if (data.boqItems) setFields.boqItems = normalizeBoqItems(data.boqItems);
