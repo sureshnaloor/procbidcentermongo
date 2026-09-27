@@ -103,7 +103,14 @@ export async function GET(req: NextRequest) {
     filter.status = { $in: ['published', 'closed', 'awarded'] };
   }
 
-  if (status && !filter.status) filter.status = status as ITender['status'];
+  if (status) {
+    if (filter.status) {
+      // Restricted viewers (vendor / public): allow narrowing only within the permitted set
+      if (['published', 'closed', 'awarded'].includes(status)) filter.status = status as ITender['status'];
+    } else {
+      filter.status = status as ITender['status'];
+    }
+  }
   if (type) filter.type = type as ITender['type'];
   if (search) filter.$or = [
     { title: { $regex: search, $options: 'i' } },
@@ -147,11 +154,18 @@ export async function GET(req: NextRequest) {
     const enriched = items.map((tender) => {
       const invite = inviteByTender.get(tender._id!.toString());
       const myBids = bidsByTender.get(tender._id!.toString()) ?? [];
+      // Mask award details from non-winning vendors when redacted by the company
+      const won = Boolean(
+        (tender.awardedBidId && myBids.some((b) => String(b._id) === String(tender.awardedBidId))) ||
+        myBids.some((b) => b.status === 'accepted')
+      );
+      const mask = Boolean(tender.awardMasked) && !won;
       return {
         ...tender,
+        ...(mask ? { awardedVendorName: '*******', awardedAmount: undefined, awardedToVendorId: undefined } : {}),
         company: companyById.get(tender.companyProfileId.toString()) ?? null,
         participation: invite
-          ? { status: invite.status, canPrepareOffer: isOfferAuthorized(invite.status) && myBids.length === 0 }
+          ? { status: invite.status, inviteId: invite._id, canPrepareOffer: isOfferAuthorized(invite.status) && myBids.length === 0 }
           : { status: null, canPrepareOffer: false },
         myBids: myBids.map((b) => ({ ...b, totalPrice: resolvedBidTotal(b) })),
       };

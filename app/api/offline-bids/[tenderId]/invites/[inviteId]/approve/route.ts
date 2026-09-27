@@ -20,6 +20,13 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ te
   const isOwner = profile?.userType === 'company' && profile._id!.toString() === tender.companyProfileId.toString();
   if (!isAdmin && !isOwner) return NextResponse.json({ error: 'Access denied' }, { status: 403 });
 
+  const concluded =
+    ['closed', 'awarded', 'cancelled'].includes(tender.status) ||
+    Boolean(tender.bidDeadline && new Date(tender.bidDeadline).getTime() < Date.now());
+  if (concluded) {
+    return NextResponse.json({ error: 'This package is concluded. Offline invites can no longer be approved.' }, { status: 400 });
+  }
+
   const invite = await offlineInvites.findOne({ _id: new ObjectId(inviteId), tenderId: tender._id! });
   if (!invite) return NextResponse.json({ error: 'Invite not found' }, { status: 404 });
   if (invite.status === 'approved') return NextResponse.json(invite);

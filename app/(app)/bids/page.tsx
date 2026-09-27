@@ -1,18 +1,20 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { FileText, Loader2, DollarSign, Clock, Building2, CalendarClock, User, Search, Scale, Archive, Calendar, Award, XCircle, AlertCircle } from "lucide-react";
+import { FileText, Loader2, DollarSign, Clock, Building2, CalendarClock, User, Scale, Archive, Calendar, Trophy } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import { PROCUREMENT_TYPES } from "@/lib/procurement";
 import { DeadlineCountdown } from "@/components/deadline-countdown";
+import {
+  SectionFilterBar, matchesDateFilters, matchesSearch, usePersistentFilters, yearsFrom,
+  type SectionFilterState,
+} from "@/components/list-filters";
 
 const BID_STATUS_COLORS: Record<string, "default" | "secondary" | "destructive" | "outline" | "success" | "warning"> = {
   draft: "secondary",
@@ -49,8 +51,9 @@ export default function BidsPage() {
   const user = (session as any)?.user;
   const isAdmin = user?.role === "admin" || user?.isSuperAdmin;
 
-  const [search, setSearch] = useState("");
-  const [typeFilter, setTypeFilter] = useState("all");
+  const filterUid = user?.id ?? "anon";
+  const [activeFilters, setActiveFilters] = usePersistentFilters(`filters:bids:active:${filterUid}`);
+  const [archivedFilters, setArchivedFilters] = usePersistentFilters(`filters:bids:archived:${filterUid}`);
 
   const { data: profile, isLoading: loadingProfile } = useQuery({
     queryKey: ["profile", "me"],
@@ -116,18 +119,6 @@ export default function BidsPage() {
 
     // Sort packages: packages with bids first, then by most recent bid/creation
     return groups
-      .filter(({ tender, bids: nested }) => {
-        if (typeFilter !== "all" && tender.type !== typeFilter) return false;
-        if (!search.trim()) return true;
-        const q = search.toLowerCase();
-        const titleMatch = (tender.title || "").toLowerCase().includes(q);
-        const companyMatch = (tender.company?.companyName || "").toLowerCase().includes(q);
-        const vendorMatch = nested.some((b: any) =>
-          (b.vendor?.companyName || "").toLowerCase().includes(q) ||
-          (b.vendor?.contactPerson || "").toLowerCase().includes(q)
-        );
-        return titleMatch || companyMatch || vendorMatch;
-      })
       .sort((a, b) => {
         const aHasBids = a.bids.length > 0 ? 1 : 0;
         const bHasBids = b.bids.length > 0 ? 1 : 0;
@@ -136,21 +127,42 @@ export default function BidsPage() {
         const bTime = b.bids[0] ? (receivedAt(b.bids[0])?.getTime() ?? 0) : new Date(b.tender.createdAt || 0).getTime();
         return bTime - aTime;
       });
-  }, [tenderData, bids, isCompany, isAdmin, search, typeFilter]);
+  }, [tenderData, bids, isCompany, isAdmin]);
 
-  const { activePackages, archivedPackages } = useMemo(() => {
+  const matchPackage = ({ tender, bids: nested }: { tender: any; bids: any[] }, f: SectionFilterState): boolean => {
+    if (f.type && tender.type !== f.type) return false;
+    if (!matchesDateFilters(tender.createdAt, f)) return false;
+    const supplierNames = nested.map((b: any) => b.vendor?.companyName || b.offlineSupplier?.name).filter(Boolean) as string[];
+    if (f.counterpart && !supplierNames.includes(f.counterpart)) return false;
+    if (f.search && !matchesSearch(
+      [tender.title, tender.company?.companyName, ...nested.flatMap((b: any) => [b.vendor?.companyName, b.vendor?.contactPerson])],
+      f.search
+    )) return false;
+    return true;
+  };
+
+  const { activePackages, archivedPackages, hasActivePkgAny, hasArchivedPkgAny } = useMemo(() => {
     const isArchived = (pkg: { tender: any }) => {
       const isConcluded = ["closed", "awarded", "cancelled", "archived"].includes(pkg.tender.status);
       const isPastDue = pkg.tender.bidDeadline && new Date(pkg.tender.bidDeadline).getTime() < Date.now();
       return isConcluded || isPastDue;
     };
     return {
-      activePackages: packages.filter((p) => !isArchived(p)),
-      archivedPackages: packages.filter(isArchived),
+      activePackages: packages.filter((p) => !isArchived(p) && matchPackage(p, activeFilters)),
+      archivedPackages: packages.filter((p) => isArchived(p) && matchPackage(p, archivedFilters)),
+      hasActivePkgAny: packages.some((p) => !isArchived(p)),
+      hasArchivedPkgAny: packages.some((p) => isArchived(p)),
     };
-  }, [packages]);
+  }, [packages, activeFilters, archivedFilters]);
 
-  const { activeVendorBids, archivedVendorBids } = useMemo(() => {
+  const matchVendorBid = (b: any, f: SectionFilterState): boolean => {
+    if (!matchesDateFilters(b.tender?.createdAt ?? b.createdAt, f)) return false;
+    if (f.counterpart && (b.tender?.company?.companyName ?? "") !== f.counterpart) return false;
+    if (f.search && !matchesSearch([b.tender?.title, String(b._id ?? "")], f.search)) return false;
+    return true;
+  };
+
+  const { activeVendorBids, archivedVendorBids, hasActiveBidAny, hasArchivedBidAny } = useMemo(() => {
     const list = bids as any[];
     const isArchived = (b: any) => {
       const isTenderConcluded = ["closed", "awarded", "cancelled", "archived"].includes(b.tender?.status);
@@ -159,10 +171,26 @@ export default function BidsPage() {
       return isTenderConcluded || isBidConcluded || isPastDue;
     };
     return {
-      activeVendorBids: list.filter((b) => !isArchived(b)),
-      archivedVendorBids: list.filter(isArchived),
+      activeVendorBids: list.filter((b) => !isArchived(b) && matchVendorBid(b, activeFilters)),
+      archivedVendorBids: list.filter((b) => isArchived(b) && matchVendorBid(b, archivedFilters)),
+      hasActiveBidAny: list.some((b) => !isArchived(b)),
+      hasArchivedBidAny: list.some((b) => isArchived(b)),
     };
-  }, [bids]);
+  }, [bids, activeFilters, archivedFilters]);
+
+  const counterpartOptions = useMemo(() => {
+    const names = new Set<string>();
+    for (const b of bids as any[]) {
+      const n = isVendor ? b.tender?.company?.companyName : (b.vendor?.companyName || b.offlineSupplier?.name);
+      if (n) names.add(n);
+    }
+    return [...names].sort((a, b) => a.localeCompare(b));
+  }, [bids, isVendor]);
+
+  const yearOptions = useMemo(
+    () => yearsFrom((bids as any[]).map((b) => b.tender?.createdAt ?? b.createdAt)),
+    [bids]
+  );
 
   const isLoading = loadingProfile || loadingBids || (isArranged && loadingTenders);
 
@@ -183,31 +211,6 @@ export default function BidsPage() {
         </div>
       </div>
 
-      {isArranged && (
-        <div className="flex flex-wrap items-center gap-3 glass p-2 rounded-2xl">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by tender, company, or supplier..."
-              className="pl-9 h-9 text-xs rounded-xl bg-background/50"
-            />
-          </div>
-          <Select value={typeFilter} onValueChange={setTypeFilter}>
-            <SelectTrigger className="w-[140px] h-9 text-xs rounded-xl bg-background/50">
-              <SelectValue placeholder="All Types" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Types</SelectItem>
-              <SelectItem value="rfq">RFQ</SelectItem>
-              <SelectItem value="rfp">RFP</SelectItem>
-              <SelectItem value="tender">Tender</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      )}
-
       {isLoading ? (
         <div className="flex items-center justify-center py-16"><Loader2 className="animate-spin h-6 w-6 text-muted-foreground" /></div>
       ) : isArranged ? (
@@ -217,7 +220,7 @@ export default function BidsPage() {
               <FileText className="h-7 w-7 text-muted-foreground" />
             </div>
             <p className="text-muted-foreground font-medium">
-              {search ? "No matching packages found." : "No packages or bids available yet."}
+              No packages or bids available yet.
             </p>
             {isCompany && (
               <Link href="/tenders" className="text-sm font-semibold text-primary hover:text-primary/80 link-underline mt-2 inline-block">Go to my tenders</Link>
@@ -225,29 +228,42 @@ export default function BidsPage() {
           </div>
         ) : (
           <div className="space-y-8">
-            {/* Active / Open Section */}
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                  Active & Live Packages ({activePackages.length})
-                </h2>
+            {/* Active / Open Section — own filter bar */}
+            {hasActivePkgAny && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                    Active & Live Packages ({activePackages.length})
+                  </h2>
+                </div>
+                <SectionFilterBar
+                  value={activeFilters}
+                  onChange={setActiveFilters}
+                  years={yearOptions}
+                  searchPlaceholder="Search active packages, suppliers…"
+                  showType
+                  counterpartLabel="Supplier"
+                  counterpartPlural="Suppliers"
+                  counterpartOptions={counterpartOptions}
+                  idPrefix="active-bidpkg"
+                />
+                {activePackages.length === 0 ? (
+                  <div className="p-6 text-center rounded-2xl border border-dashed border-border bg-muted/10 text-sm text-muted-foreground">
+                    No active packages match these filters.
+                  </div>
+                ) : (
+                  <div className="grid gap-5 stagger-children">
+                    {activePackages.map(({ tender, bids: nested }) => (
+                      <TenderPackageCard key={tender._id} tender={tender} bids={nested} isArchived={false} />
+                    ))}
+                  </div>
+                )}
               </div>
-              {activePackages.length === 0 ? (
-                <div className="p-6 text-center rounded-2xl border border-dashed border-border bg-muted/10 text-sm text-muted-foreground">
-                  No active open packages right now. Past and concluded packages are listed below.
-                </div>
-              ) : (
-                <div className="grid gap-5 stagger-children">
-                  {activePackages.map(({ tender, bids: nested }) => (
-                    <TenderPackageCard key={tender._id} tender={tender} bids={nested} isArchived={false} />
-                  ))}
-                </div>
-              )}
-            </div>
+            )}
 
-            {/* Archived / Past Section */}
-            {archivedPackages.length > 0 && (
+            {/* Archived / Past Section — own filter bar */}
+            {hasArchivedPkgAny && (
               <div className="space-y-4 pt-6 border-t border-border/60">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -258,11 +274,28 @@ export default function BidsPage() {
                   </div>
                   <Badge variant="secondary" className="text-[10px]">Closed / Awarded / Expired</Badge>
                 </div>
-                <div className="grid gap-5 stagger-children opacity-95">
-                  {archivedPackages.map(({ tender, bids: nested }) => (
-                    <TenderPackageCard key={tender._id} tender={tender} bids={nested} isArchived={true} />
-                  ))}
-                </div>
+                <SectionFilterBar
+                  value={archivedFilters}
+                  onChange={setArchivedFilters}
+                  years={yearOptions}
+                  searchPlaceholder="Search archived packages, suppliers…"
+                  showType
+                  counterpartLabel="Supplier"
+                  counterpartPlural="Suppliers"
+                  counterpartOptions={counterpartOptions}
+                  idPrefix="archived-bidpkg"
+                />
+                {archivedPackages.length === 0 ? (
+                  <div className="p-6 text-center rounded-2xl border border-dashed border-border bg-muted/10 text-sm text-muted-foreground">
+                    No archived packages match these filters.
+                  </div>
+                ) : (
+                  <div className="grid gap-5 stagger-children opacity-95">
+                    {archivedPackages.map(({ tender, bids: nested }) => (
+                      <TenderPackageCard key={tender._id} tender={tender} bids={nested} isArchived={true} />
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -281,29 +314,41 @@ export default function BidsPage() {
         </div>
       ) : (
         <div className="space-y-8">
-          {/* Active Vendor Bids */}
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                Active Bids & Inquiries ({activeVendorBids.length})
-              </h2>
+          {/* Active Vendor Bids — own filter bar */}
+          {hasActiveBidAny && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                  Active Bids & Inquiries ({activeVendorBids.length})
+                </h2>
+              </div>
+              <SectionFilterBar
+                value={activeFilters}
+                onChange={setActiveFilters}
+                years={yearOptions}
+                searchPlaceholder="Search active bids…"
+                counterpartLabel="EPC Company"
+                counterpartPlural="EPC Companies"
+                counterpartOptions={counterpartOptions}
+                idPrefix="active-vendorbid"
+              />
+              {activeVendorBids.length === 0 ? (
+                <div className="p-6 text-center rounded-2xl border border-dashed border-border bg-muted/10 text-sm text-muted-foreground">
+                  No active bids match these filters.
+                </div>
+              ) : (
+                <div className="grid gap-4 stagger-children">
+                  {activeVendorBids.map((b: any) => (
+                    <VendorBidListItem key={b._id} bid={b} isArchived={false} />
+                  ))}
+                </div>
+              )}
             </div>
-            {activeVendorBids.length === 0 ? (
-              <div className="p-6 text-center rounded-2xl border border-dashed border-border bg-muted/10 text-sm text-muted-foreground">
-                No active bids in progress. Concluded bids are shown in the archive below.
-              </div>
-            ) : (
-              <div className="grid gap-4 stagger-children">
-                {activeVendorBids.map((b: any) => (
-                  <VendorBidListItem key={b._id} bid={b} isArchived={false} />
-                ))}
-              </div>
-            )}
-          </div>
+          )}
 
-          {/* Archived Vendor Bids */}
-          {archivedVendorBids.length > 0 && (
+          {/* Archived Vendor Bids — own filter bar */}
+          {hasArchivedBidAny && (
             <div className="space-y-4 pt-6 border-t border-border/60">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -314,11 +359,27 @@ export default function BidsPage() {
                 </div>
                 <Badge variant="secondary" className="text-[10px]">Concluded / Expired</Badge>
               </div>
-              <div className="grid gap-4 stagger-children opacity-90">
-                {archivedVendorBids.map((b: any) => (
-                  <VendorBidListItem key={b._id} bid={b} isArchived={true} />
-                ))}
-              </div>
+              <SectionFilterBar
+                value={archivedFilters}
+                onChange={setArchivedFilters}
+                years={yearOptions}
+                searchPlaceholder="Search archived bids…"
+                counterpartLabel="EPC Company"
+                counterpartPlural="EPC Companies"
+                counterpartOptions={counterpartOptions}
+                idPrefix="archived-vendorbid"
+              />
+              {archivedVendorBids.length === 0 ? (
+                <div className="p-6 text-center rounded-2xl border border-dashed border-border bg-muted/10 text-sm text-muted-foreground">
+                  No archived bids match these filters.
+                </div>
+              ) : (
+                <div className="grid gap-4 stagger-children opacity-90">
+                  {archivedVendorBids.map((b: any) => (
+                    <VendorBidListItem key={b._id} bid={b} isArchived={true} />
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -416,6 +477,16 @@ function VendorBidListItem({ bid, isArchived }: { bid: any; isArchived: boolean 
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                 <Badge variant={BID_STATUS_COLORS[bid.status] ?? "outline"} className="shrink-0">{statusLabel(bid.status)}</Badge>
+                {bid.status === "accepted" && tender?.status === "awarded" && (
+                  <span className="badge-celebrate-chip inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full shrink-0">
+                    <Trophy className="h-3 w-3" /> Awarded — Congratulations!
+                  </span>
+                )}
+                {tender?.status === "awarded" && bid.status !== "accepted" && bid.status !== "draft" && (
+                  <Badge variant="secondary" className="text-[10px] uppercase tracking-wider text-muted-foreground shrink-0">
+                    Not awarded
+                  </Badge>
+                )}
                 {tender?.status && (
                   <Badge variant={TENDER_STATUS_COLORS[tender.status] ?? "outline"} className="text-[10px]">
                     Package: {statusLabel(tender.status)}

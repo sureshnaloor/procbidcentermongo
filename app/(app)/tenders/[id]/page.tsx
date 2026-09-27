@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Edit, Trash2, FileText, CalendarClock, MapPin, DollarSign, Users, Loader2, ExternalLink, Plus, AlertCircle, Copy, Pencil, Download, Ship, Trophy, XCircle, CheckCircle2 } from "lucide-react";
+import { Edit, Trash2, FileText, CalendarClock, MapPin, DollarSign, Users, Loader2, ExternalLink, Plus, AlertCircle, Copy, Pencil, Download, Ship, Trophy, XCircle, CheckCircle2, PartyPopper, Lock } from "lucide-react";
 import { format } from "date-fns";
 import { documentCategoryLabel, getPublishDateIssues, PROCUREMENT_TYPES } from "@/lib/procurement";
 import { incotermLabel } from "@/lib/incoterms";
@@ -47,6 +47,12 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
   const isOwner = profile?.userType === "company" && tender && String(profile?._id) === String(tender.companyProfileId);
   const isVendor = profile?.userType === "vendor";
   const isAdmin = user?.role === "admin";
+  const isWinningVendor = Boolean(
+    isVendor && tender?.status === "awarded" && tender?.myBid?._id && (
+      (tender.awardedBidId && String(tender.awardedBidId) === String(tender.myBid._id)) ||
+      tender.myBid.status === "accepted"
+    )
+  );
 
   const { data: invites = [] } = useQuery({
     queryKey: ["tender-invites", id],
@@ -317,6 +323,44 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
         </div>
       )}
 
+      {/* Winning Supplier Celebration Banner */}
+      {isWinningVendor && (
+        <div className="badge-celebrate rounded-xl p-4 flex items-center gap-3" id="winner-congrats-banner">
+          <div className="h-10 w-10 rounded-full bg-amber-400/20 border border-amber-400/50 flex items-center justify-center shrink-0">
+            <PartyPopper className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+          </div>
+          <div className="min-w-0">
+            <div className="font-bold text-foreground flex items-center gap-2 flex-wrap">
+              Awarded — Congratulations!
+              <span className="badge-celebrate-chip inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full">
+                <Trophy className="h-3 w-3" /> You won this package
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              {tender.awardedAmount != null && (
+                <>Awarded value: <span className="font-semibold text-foreground">{tender.awardedCurrency || tender.currency} {Number(tender.awardedAmount).toLocaleString()}</span>. </>
+              )}
+              The company will contact you with next steps.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Losing supplier outcome note */}
+      {isVendor && !isWinningVendor && tender.status === "awarded" && tender.myBid?._id && tender.myBid.status !== "draft" && (
+        <div className="rounded-xl border border-border bg-muted/30 p-4 flex items-center gap-3" id="not-awarded-banner">
+          <div className="h-10 w-10 rounded-full bg-muted/60 border border-border flex items-center justify-center shrink-0">
+            <XCircle className="h-5 w-5 text-muted-foreground" />
+          </div>
+          <div className="min-w-0">
+            <div className="font-semibold text-foreground text-sm">Not awarded this time</div>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              This package was awarded to <span className="font-medium text-foreground">{tender.awardedVendorName || "another supplier"}</span>. Thank you for participating — new packages arrive regularly.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Concluded Package Outcome Banner */}
       {["closed", "awarded", "cancelled"].includes(tender.status) && (
         <div className={`p-4 rounded-xl border space-y-2 ${
@@ -342,6 +386,11 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
                       ({tender.awardedCurrency || tender.currency} {Number(tender.awardedAmount).toLocaleString()})
                     </span>
                   )}
+                  {isOwner && tender.awardMasked && (
+                    <Badge variant="outline" className="ml-2 align-middle text-[10px] font-semibold gap-1 border-amber-500/50 text-amber-600 dark:text-amber-400 bg-amber-500/10" title="Winner name and price are hidden from other suppliers">
+                      <Lock className="h-3 w-3" /> Masked
+                    </Badge>
+                  )}
                 </div>
               )}
               {tender.statusRemarks && (
@@ -356,15 +405,28 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
             </div>
 
             {isOwner && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="shrink-0 text-xs gap-1"
-                onClick={() => setEditRemarksOpen(true)}
-                id="edit-remarks-btn"
-              >
-                <Pencil className="h-3.5 w-3.5" /> Edit Remarks
-              </Button>
+              <div className="flex flex-col gap-2 shrink-0">
+                {tender.status === "awarded" && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="text-xs gap-1"
+                    onClick={() => setAwardOpen(true)}
+                    id="change-award-btn"
+                  >
+                    <Trophy className="h-3.5 w-3.5 text-amber-500" /> Change Awarded Supplier
+                  </Button>
+                )}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-xs gap-1"
+                  onClick={() => setEditRemarksOpen(true)}
+                  id="edit-remarks-btn"
+                >
+                  <Pencil className="h-3.5 w-3.5" /> Edit Remarks
+                </Button>
+              </div>
             )}
           </div>
         </div>
@@ -562,6 +624,11 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
                   <div>
                     <div className="text-sm font-medium">{inv.vendor?.companyName ?? "Supplier"}</div>
                     <div className="text-xs text-muted-foreground capitalize">{inv.status}</div>
+                    {inv.status === "declined" && inv.declineReason && (
+                      <div className="mt-1.5 text-xs text-muted-foreground bg-muted/50 border border-border/60 rounded-md px-2 py-1.5 max-w-md">
+                        <span className="font-medium text-foreground">Decline reason:</span> {inv.declineReason}
+                      </div>
+                    )}
                   </div>
                   <div className="flex items-center gap-2">
                     {inv.offerPath && (inv.status === "invited" || inv.status === "accepted") && (

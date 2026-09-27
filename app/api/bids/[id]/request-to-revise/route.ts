@@ -25,7 +25,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
   const tender = await tenders.findOne({ _id: bid.tenderId });
   if (!tender) return NextResponse.json({ error: 'Tender not found' }, { status: 404 });
-  if (tender.status === 'awarded' || tender.status === 'cancelled') {
+  if (['closed', 'awarded', 'cancelled'].includes(tender.status)) {
     return NextResponse.json({ error: 'This package is no longer open for revisions' }, { status: 400 });
   }
   if (!VENDOR_CAN_REQUEST_REVISION_STATUSES.includes(bid.status)) {

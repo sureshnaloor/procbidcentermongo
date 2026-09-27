@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Loader2, ArrowLeft, Check, X, RotateCcw, SendHorizontal, Pencil, Ban, Eye, Printer, RefreshCw, Phone, Upload } from "lucide-react";
+import { Loader2, ArrowLeft, Check, X, RotateCcw, SendHorizontal, Pencil, Ban, Eye, Printer, RefreshCw, Phone, Upload, PartyPopper, Trophy } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -223,6 +223,7 @@ export default function BidDetailPage({ params }: { params: Promise<{ id: string
 
   const isVendorOwner = profile?.userType === "vendor" && String(bid.vendorProfileId) === String(profile?._id);
   const isCompanyOwner = profile?.userType === "company" && String(bid.tender?.companyProfileId) === String(profile?._id);
+  const tenderConcluded = ["closed", "awarded", "cancelled"].includes(bid.tender?.status);
   const showThread = (isVendorOwner || isCompanyOwner) && Boolean(bid.tenderId && bid.vendorProfileId);
   const counterpartName = isVendorOwner
     ? (bid.tender?.company?.companyName || "Company")
@@ -241,6 +242,39 @@ export default function BidDetailPage({ params }: { params: Promise<{ id: string
           {bid.tender && <Link href={`/tenders/${bid.tenderId}`} className="text-sm text-primary hover:underline">{bid.tender.title}</Link>}
         </div>
       </div>
+
+      {/* Winning supplier celebration */}
+      {isVendorOwner && bid.status === "accepted" && bid.tender?.status === "awarded" && (
+        <div className="badge-celebrate rounded-xl p-4 flex items-center gap-3" id="winner-congrats-banner">
+          <div className="h-10 w-10 rounded-full bg-amber-400/20 border border-amber-400/50 flex items-center justify-center shrink-0">
+            <PartyPopper className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+          </div>
+          <div className="min-w-0">
+            <div className="font-bold text-foreground flex items-center gap-2 flex-wrap">
+              Awarded — Congratulations!
+              <span className="badge-celebrate-chip inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full">
+                <Trophy className="h-3 w-3" /> Your offer won this package
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">The company will contact you with next steps.</p>
+          </div>
+        </div>
+      )}
+
+      {/* Losing supplier outcome note */}
+      {isVendorOwner && bid.tender?.status === "awarded" && bid.status !== "accepted" && bid.status !== "draft" && (
+        <div className="rounded-xl border border-border bg-muted/30 p-4 flex items-center gap-3" id="not-awarded-banner">
+          <div className="h-10 w-10 rounded-full bg-muted/60 border border-border flex items-center justify-center shrink-0">
+            <X className="h-5 w-5 text-muted-foreground" />
+          </div>
+          <div className="min-w-0">
+            <div className="font-semibold text-foreground text-sm">Not awarded this time</div>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              This package was awarded to <span className="font-medium text-foreground">{bid.tender?.awardedVendorName || "another supplier"}</span>. Thank you for participating.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Vendor actions */}
       {isVendorOwner && (
@@ -274,7 +308,7 @@ export default function BidDetailPage({ params }: { params: Promise<{ id: string
               <RefreshCw /> Request to revise
             </Button>
           )}
-          {bid.status === "draft" && (
+          {bid.status === "draft" && bid.canModify && (
             <Button size="sm" onClick={() => setConfirmKind("submit")} disabled={submitMutation.isPending} id="submit-bid-btn">
               <SendHorizontal /> Submit
             </Button>
@@ -373,7 +407,7 @@ export default function BidDetailPage({ params }: { params: Promise<{ id: string
       )}
 
       {/* Company actions */}
-      {isCompanyOwner && bid.status === "submitted" && (
+      {isCompanyOwner && !tenderConcluded && bid.status === "submitted" && (
         <div className="flex gap-2">
           <Button size="sm" variant="outline" onClick={() => statusMutation.mutate("under_review")} id="mark-review-btn">Mark Under Review</Button>
           <Button size="sm" variant="outline" onClick={() => statusMutation.mutate("shortlisted")} id="shortlist-btn">Shortlist</Button>
@@ -393,14 +427,14 @@ export default function BidDetailPage({ params }: { params: Promise<{ id: string
           )}
         </div>
       )}
-      {isCompanyOwner && bid.status === "under_review" && (
+      {isCompanyOwner && !tenderConcluded && bid.status === "under_review" && (
         <div className="flex gap-2">
           <Button size="sm" variant="outline" onClick={() => statusMutation.mutate("shortlisted")} id="shortlist-review-btn">Shortlist</Button>
           <Button size="sm" onClick={() => statusMutation.mutate("accepted")} id="accept-review-btn"><Check /> Accept</Button>
           <Button size="sm" variant="outline" onClick={() => statusMutation.mutate("rejected")} id="reject-review-btn"><X /> Reject</Button>
         </div>
       )}
-      {isCompanyOwner && bid.status === "shortlisted" && (
+      {isCompanyOwner && !tenderConcluded && bid.status === "shortlisted" && (
         <div className="flex gap-2">
           <Button size="sm" onClick={() => statusMutation.mutate("accepted")} id="accept-shortlisted-btn"><Check /> Accept</Button>
           <Button size="sm" variant="outline" onClick={() => statusMutation.mutate("rejected")} id="reject-shortlisted-btn"><X /> Reject</Button>

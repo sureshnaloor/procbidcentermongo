@@ -39,16 +39,17 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     : null);
   const company = tender ? await profiles.findOne({ _id: tender.companyProfileId }) : null;
   const deadlineOpen = !tender?.bidDeadline || tender.bidDeadline.getTime() >= Date.now();
+  const tenderConcluded = Boolean(tender && ['closed', 'awarded', 'cancelled'].includes(tender.status));
   const revisionOpen = Boolean(bid.revisionRequest?.open);
   const pendingRevision = revisionIsPending(bid.revisionRequest);
-  const canModify = isVendorOwner && bid.status === 'draft';
-  const canRevise = isVendorOwner && revisionOpen && bid.revisionRequest?.source === 'vendor_invite';
-  const canVerbalRevise = isCompanyOwner && revisionOpen && bid.revisionRequest?.source === 'company_verbal';
-  const canRequestRevision = isCompanyOwner && !revisionOpen && !pendingRevision && VENDOR_REVISABLE_STATUSES.includes(bid.status);
-  const canOpenVerbalRevision = isCompanyOwner && !revisionOpen && !pendingRevision && VERBAL_REVISABLE_STATUSES.includes(bid.status);
-  const canRequestToRevise = isVendorOwner && !revisionOpen && !pendingRevision && VENDOR_CAN_REQUEST_REVISION_STATUSES.includes(bid.status) && tender?.status !== 'awarded' && tender?.status !== 'cancelled';
+  const canModify = isVendorOwner && bid.status === 'draft' && !tenderConcluded;
+  const canRevise = isVendorOwner && revisionOpen && bid.revisionRequest?.source === 'vendor_invite' && !tenderConcluded;
+  const canVerbalRevise = isCompanyOwner && revisionOpen && bid.revisionRequest?.source === 'company_verbal' && !tenderConcluded;
+  const canRequestRevision = isCompanyOwner && !revisionOpen && !pendingRevision && VENDOR_REVISABLE_STATUSES.includes(bid.status) && !tenderConcluded;
+  const canOpenVerbalRevision = isCompanyOwner && !revisionOpen && !pendingRevision && VERBAL_REVISABLE_STATUSES.includes(bid.status) && !tenderConcluded;
+  const canRequestToRevise = isVendorOwner && !revisionOpen && !pendingRevision && VENDOR_CAN_REQUEST_REVISION_STATUSES.includes(bid.status) && !tenderConcluded;
   const canApproveRevisionRequest = isCompanyOwner && pendingRevision;
-  const canWithdraw = isVendorOwner && deadlineOpen && ['draft', 'submitted', 'under_review', 'shortlisted'].includes(bid.status);
+  const canWithdraw = isVendorOwner && deadlineOpen && ['draft', 'submitted', 'under_review', 'shortlisted'].includes(bid.status) && !tenderConcluded;
 
   let blacklisted = false;
   if (isCompanyOwner && tender) {
@@ -70,6 +71,12 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     await bids.updateOne({ _id: bid._id! }, { $set: repair });
   }
 
+  // Mask award details from a non-winning vendor viewing their own losing offer
+  const isBidWinner = Boolean(
+    (tender?.awardedBidId && String(tender.awardedBidId) === String(bid._id)) || bid.status === 'accepted'
+  );
+  const maskTenderAward = Boolean(tender?.awardMasked) && isVendorOwner && !isBidWinner;
+
   return NextResponse.json({
     ...payload,
     totalPrice,
@@ -78,7 +85,11 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     revisionRequest: bid.revisionRequest ?? null,
     vendor,
     tender: tender
-      ? { ...tender, company: company ? { _id: company._id, companyName: company.companyName } : null }
+      ? {
+          ...tender,
+          ...(maskTenderAward ? { awardedVendorName: '*******', awardedAmount: undefined, awardedToVendorId: undefined } : {}),
+          company: company ? { _id: company._id, companyName: company.companyName } : null,
+        }
       : null,
     canModify,
     canRevise,
@@ -104,6 +115,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const profile = await getProfileForUser(auth.user.id);
   const tender = await tenders.findOne({ _id: bid.tenderId });
+  if (tender && ['closed', 'awarded', 'cancelled'].includes(tender.status)) {
+    return NextResponse.json({ error: 'This package is concluded. Offers can no longer be edited.' }, { status: 400 });
+  }
   const isVendorOwner = Boolean(profile && bid.vendorProfileId.toString() === profile._id!.toString());
   const isCompanyOwner = Boolean(
     profile?.userType === 'company' && tender && tender.companyProfileId.toString() === profile._id!.toString()

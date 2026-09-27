@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { useQuery } from "@tanstack/react-query";
+import { toast } from "sonner";
 import {
   LayoutDashboard,
   FileText,
@@ -22,6 +23,8 @@ import {
   Scale,
   FileSpreadsheet,
   AlertTriangle,
+  Trophy,
+  XCircle,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -67,6 +70,49 @@ export default function AppShell({ session, children }: AppShellProps) {
   const unreadNotificationsCount = Array.isArray(notifData)
     ? notifData.filter((n: any) => !n.isRead).length
     : 0;
+  const hasUnreadAwardWin = Array.isArray(notifData)
+    ? notifData.some((n: any) => !n.isRead && n.type === "tender_awarded")
+    : false;
+
+  // Real-time toast for newly arrived notifications (poll-based).
+  // First load seeds the seen set silently; only genuinely new unread items pop up.
+  const seenNotifIds = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    if (!Array.isArray(notifData)) return;
+    const unread = notifData.filter((n: any) => !n.isRead);
+    if (seenNotifIds.current === null) {
+      seenNotifIds.current = new Set(unread.map((n: any) => String(n._id)));
+      return;
+    }
+    for (const n of unread) {
+      const id = String(n._id);
+      if (seenNotifIds.current.has(id)) continue;
+      seenNotifIds.current.add(id);
+      const isWin = n.type === "tender_awarded";
+      const isLost = n.type === "tender_award_lost";
+      const url =
+        n.type === "message_received"
+          ? n.relatedId
+            ? `/messages/dm/${n.relatedId}`
+            : "/messages"
+          : n.relatedType === "tender" && n.relatedId
+          ? `/tenders/${n.relatedId}`
+          : n.relatedType === "bid" && n.relatedId
+          ? `/bids/${n.relatedId}`
+          : "/notifications";
+      toast(n.title, {
+        description: n.content,
+        duration: isWin ? 12000 : 6000,
+        icon: isWin ? (
+          <Trophy className="h-4 w-4 text-amber-500" />
+        ) : isLost ? (
+          <XCircle className="h-4 w-4 text-muted-foreground" />
+        ) : undefined,
+        action: { label: "View", onClick: () => router.push(url) },
+        className: isWin ? "!border-amber-500/60 !bg-amber-500/10" : undefined,
+      });
+    }
+  }, [notifData, router]);
 
   type MenuItem = { label: string; href: string; icon: React.ElementType; badge?: number };
   const menuItems: MenuItem[] = [
@@ -81,6 +127,7 @@ export default function AppShell({ session, children }: AppShellProps) {
   menuItems.push(
     { label: "Documents", href: "/documents", icon: FolderOpen },
     { label: "Messages", href: "/messages", icon: MessageSquare, badge: unreadMessagesCount },
+    { label: "Notifications", href: "/notifications", icon: Bell, badge: unreadNotificationsCount },
   );
 
   if (userType !== "vendor") {
@@ -111,7 +158,7 @@ export default function AppShell({ session, children }: AppShellProps) {
   const navLinkClass = (isActive: boolean) =>
     `group flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 relative overflow-hidden ${
       isActive
-        ? "bg-primary/10 text-primary shadow-[0_0_18px_-6px_rgba(200,90,58,0.35)]"
+        ? "bg-primary/10 text-primary shadow-[0_0_18px_-6px_rgba(193,80,46,0.4)]"
         : "text-muted-foreground hover:text-foreground hover:bg-accent"
     }`;
 
@@ -121,7 +168,7 @@ export default function AppShell({ session, children }: AppShellProps) {
       <aside className="hidden md:flex flex-col w-64 border-r border-border bg-card/80 backdrop-blur-xl print:hidden">
         {/* Brand */}
         <div className="h-16 flex items-center gap-2.5 px-6 border-b border-border">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center shadow-lg shadow-primary/20">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-[#8f3a1e] flex items-center justify-center shadow-lg shadow-primary/25 ring-top">
             <span className="text-primary-foreground text-sm font-bold">PS</span>
           </div>
           <span className="font-bold text-lg tracking-tight font-[family-name:var(--font-heading)]">ProSource</span>
@@ -185,7 +232,7 @@ export default function AppShell({ session, children }: AppShellProps) {
       >
         <div className="h-16 flex items-center justify-between px-6 border-b border-border">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center shadow-lg shadow-primary/20">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-[#8f3a1e] flex items-center justify-center shadow-lg shadow-primary/25 ring-top">
               <span className="text-primary-foreground text-sm font-bold">PS</span>
             </div>
             <span className="font-bold text-lg tracking-tight font-[family-name:var(--font-heading)]">ProSource</span>
@@ -270,12 +317,18 @@ export default function AppShell({ session, children }: AppShellProps) {
 
             {/* Notification Badge */}
             <Link
-              href="/dashboard"
+              href="/notifications"
               className="relative p-2 rounded-full hover:bg-accent text-muted-foreground transition-all duration-200 hover:text-foreground"
             >
               <Bell className="h-5 w-5" />
               {unreadNotificationsCount > 0 && (
-                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-destructive rounded-full ring-2 ring-card animate-glow-pulse" />
+                hasUnreadAwardWin ? (
+                  <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 ring-2 ring-card flex items-center justify-center animate-glow-pulse" title="You won an award!">
+                    <Trophy className="h-2.5 w-2.5 text-white" />
+                  </span>
+                ) : (
+                  <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-destructive rounded-full ring-2 ring-card animate-glow-pulse" />
+                )
               )}
             </Link>
 

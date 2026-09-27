@@ -20,6 +20,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!tender || tender.companyProfileId.toString() !== profile._id!.toString()) {
     return NextResponse.json({ error: 'You can only review bids on your own tenders' }, { status: 403 });
   }
+  if (['closed', 'awarded', 'cancelled'].includes(tender.status)) {
+    return NextResponse.json({ error: 'This package is concluded. Use "Change Awarded Supplier" on the package page to update the outcome.' }, { status: 400 });
+  }
 
   const body = await req.json();
   const data = z.object({

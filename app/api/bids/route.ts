@@ -12,11 +12,13 @@ export async function GET() {
   const { bids, tenders, profiles } = await collections();
 
   let rows;
+  let viewerType: string | null = auth.user.role === 'admin' ? 'admin' : null;
   if (auth.user.role === 'admin') {
     rows = await bids.find({}).sort({ createdAt: -1 }).toArray();
   } else {
     const profile = await profiles.findOne({ userId: new ObjectId(auth.user.id) });
     if (!profile) return NextResponse.json([]);
+    viewerType = profile.userType;
     if (profile.userType === 'vendor') {
       rows = await bids.find({ vendorProfileId: profile._id! }).sort({ createdAt: -1 }).toArray();
     } else if (profile.userType === 'company') {
@@ -35,6 +37,11 @@ export async function GET() {
     vendorIds.length ? profiles.find({ _id: { $in: vendorIds } }).toArray() : Promise.resolve([]),
     tenderIds.length ? tenders.find({ _id: { $in: tenderIds } }).toArray() : Promise.resolve([]),
   ]);
+  const companyIds = [...new Map(tenderDocs.map((t) => [t.companyProfileId.toString(), t.companyProfileId])).values()];
+  const companyDocs = companyIds.length
+    ? await profiles.find({ _id: { $in: companyIds } }).project({ companyName: 1 }).toArray()
+    : [];
+  const companyNameById = new Map(companyDocs.map((c) => [c._id!.toString(), c.companyName as string]));
   const vendorById = new Map(vendorDocs.map((v) => [v._id!.toString(), {
     _id: v._id,
     companyName: v.companyName,
@@ -51,23 +58,36 @@ export async function GET() {
     status: t.status,
     bidDeadline: t.bidDeadline,
     currency: t.currency,
+    createdAt: t.createdAt,
+    company: { companyName: companyNameById.get(t.companyProfileId.toString()) ?? "Company" },
+    awardedBidId: t.awardedBidId,
+    awardedVendorName: t.awardedVendorName,
+    awardMasked: t.awardMasked,
   }]));
 
-  return NextResponse.json(rows.map((b) => ({
-    ...b,
-    totalPrice: resolvedBidTotal(b),
-    vendor: vendorById.get(b.vendorProfileId.toString())
-      ?? (b.isOffline && b.offlineSupplier
-        ? {
-            companyName: b.offlineSupplier.name,
-            contactPerson: b.offlineSupplier.contactPerson,
-            phone: b.offlineSupplier.phone,
-            city: b.offlineSupplier.city,
-            country: b.offlineSupplier.country,
-          }
-        : null),
-    tender: tenderById.get(b.tenderId.toString()) ?? null,
-  })));
+  return NextResponse.json(rows.map((b) => {
+    const t = tenderById.get(b.tenderId.toString()) ?? null;
+    // Mask award details from non-winning vendors when redacted by the company
+    const maskedTender = t && t.awardMasked && viewerType === 'vendor' &&
+      !(t.awardedBidId && String(t.awardedBidId) === String(b._id)) && b.status !== 'accepted'
+      ? { ...t, awardedVendorName: '*******' }
+      : t;
+    return {
+      ...b,
+      totalPrice: resolvedBidTotal(b),
+      vendor: vendorById.get(b.vendorProfileId.toString())
+        ?? (b.isOffline && b.offlineSupplier
+          ? {
+              companyName: b.offlineSupplier.name,
+              contactPerson: b.offlineSupplier.contactPerson,
+              phone: b.offlineSupplier.phone,
+              city: b.offlineSupplier.city,
+              country: b.offlineSupplier.country,
+            }
+          : null),
+      tender: maskedTender,
+    };
+  }));
 }
 
 export async function POST(req: NextRequest) {

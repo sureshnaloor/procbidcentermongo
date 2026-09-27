@@ -7,6 +7,7 @@ import { saveTenderDocumentFile } from '@/lib/tender-files';
 import { normalizeTenderClauses } from '@/lib/clauses';
 import { DOCUMENT_CATEGORY_VALUES, getPublishBlockers, getPublishDateIssues } from '@/lib/procurement';
 import { ensureInviteAccessToken, isVendorBlacklisted } from '@/lib/offer-link';
+import { notify } from '@/lib/notify';
 import { INCOTERM_CODES } from '@/lib/incoterms';
 import type { ITenderBoqItem } from '@/lib/types';
 
@@ -106,8 +107,20 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     ? getPublishDateIssues(tender.bidDeadline, tender.deliveryDeadline).warnings
     : [];
 
+  // Mask award details from non-winning vendors when the company chose to redact them
+  const isWinnerVendor = Boolean(
+    isVendor && profile?._id && (
+      (tender.awardedBidId && myBid && String(tender.awardedBidId) === String(myBid._id)) ||
+      myBid?.status === 'accepted'
+    )
+  );
+  const maskAwardDetails = Boolean(tender.awardMasked) && isVendor && !isWinnerVendor;
+  const tenderOut = maskAwardDetails
+    ? { ...tender, awardedVendorName: '*******', awardedAmount: undefined, awardedToVendorId: undefined }
+    : tender;
+
   return NextResponse.json({
-    ...tender,
+    ...tenderOut,
     categories: groups.filter(Boolean),
     company,
     biddingClosed: isBiddingClosed(tender),
@@ -161,6 +174,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     awardedBidId: z.string().optional(),
     awardedAmount: z.number().optional(),
     awardedCurrency: z.string().optional(),
+    awardMasked: z.boolean().optional(),
     groupIds: z.array(z.string()).optional(),
     clauses: z.array(z.object({
       kind: z.enum(['safety', 'quality', 'payment', 'delivery', 'compliance', 'scope', 'legal', 'custom']),
@@ -190,6 +204,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     'awardedBidId',
     'awardedAmount',
     'awardedCurrency',
+    'awardMasked',
     'bidDeadline',
   ]);
   const publishing = data.status === 'published' && tender.status !== 'published';
@@ -206,6 +221,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const nextDelivery = data.deliveryDeadline ? parseDateEndOfDay(data.deliveryDeadline) : tender.deliveryDeadline;
 
   const setFields: Record<string, unknown> = { updatedAt: new Date() };
+  const unsetFields: Record<string, string> = {};
   if (data.title) setFields.title = data.title;
   if (data.description !== undefined) setFields.description = data.description;
   if (data.type) setFields.type = data.type;
@@ -238,13 +254,87 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   }
   if (data.awardedAmount !== undefined) setFields.awardedAmount = data.awardedAmount;
   if (data.awardedCurrency !== undefined) setFields.awardedCurrency = data.awardedCurrency;
+  if (data.awardMasked !== undefined) setFields.awardMasked = data.awardMasked;
 
-  if (data.status === 'awarded' && data.awardedBidId && ObjectId.isValid(data.awardedBidId)) {
+  if (data.status === 'awarded') {
     const { bids } = await collections();
-    await bids.updateOne(
-      { _id: new ObjectId(data.awardedBidId), tenderId: new ObjectId(id) },
-      { $set: { status: 'accepted', updatedAt: new Date() } }
-    );
+    const newBidId = data.awardedBidId && ObjectId.isValid(data.awardedBidId) ? data.awardedBidId : null;
+    const previousBidId = tender.awardedBidId ? String(tender.awardedBidId) : '';
+    // Re-award: revert the previous winning bid if the winner changed or award went manual
+    if (tender.awardedBidId && String(tender.awardedBidId) !== newBidId) {
+      await bids.updateOne(
+        { _id: tender.awardedBidId, tenderId: new ObjectId(id), status: 'accepted' },
+        { $set: { status: 'submitted', updatedAt: new Date() } }
+      );
+    }
+    if (newBidId) {
+      await bids.updateOne(
+        { _id: new ObjectId(newBidId), tenderId: new ObjectId(id) },
+        { $set: { status: 'accepted', updatedAt: new Date() } }
+      );
+    } else {
+      // Manual/offline award: clear any previous bid-based award linkage
+      unsetFields.awardedBidId = '';
+      unsetFields.awardedToVendorId = '';
+    }
+
+    // ── Award notifications (only when the outcome actually changed) ──
+    const newWinnerName = data.awardedVendorName || tender.awardedVendorName || '';
+    const awardMasked = data.awardMasked ?? tender.awardMasked ?? false;
+    const publicWinnerName = awardMasked ? 'another supplier' : (newWinnerName || 'another supplier');
+    const awardChanged =
+      tender.status !== 'awarded' ||
+      previousBidId !== (newBidId || '') ||
+      (!newBidId && (tender.awardedVendorName || '') !== newWinnerName);
+    if (awardChanged) {
+      try {
+        const participantBids = await bids
+          .find({ tenderId: new ObjectId(id), status: { $ne: 'draft' }, isOffline: { $ne: true } })
+          .toArray();
+        const winnerBid = newBidId ? participantBids.find((b) => String(b._id) === newBidId) : null;
+        // Winner
+        if (winnerBid?.vendorProfileId) {
+          await notify({
+            profileId: winnerBid.vendorProfileId,
+            type: 'tender_awarded',
+            title: `Congratulations — you won: ${tender.title}`,
+            content: `Your offer${winnerBid.totalPrice != null ? ` of ${winnerBid.currency || tender.currency} ${Number(winnerBid.totalPrice).toLocaleString()}` : ''} was awarded this package. The company will contact you with next steps.`,
+            relatedId: winnerBid._id!,
+            relatedType: 'bid',
+          });
+        }
+        // Previous winner when a re-award takes it away
+        if (previousBidId && previousBidId !== (newBidId || '')) {
+          const prevBid = participantBids.find((b) => String(b._id) === previousBidId);
+          if (prevBid?.vendorProfileId) {
+            await notify({
+              profileId: prevBid.vendorProfileId,
+              type: 'tender_award_lost',
+              title: `Award updated: ${tender.title}`,
+              content: `The package outcome was changed and it was awarded to ${publicWinnerName}.`,
+              relatedId: prevBid._id!,
+              relatedType: 'bid',
+            });
+          }
+        }
+        // All other active participants
+        for (const b of participantBids) {
+          if (String(b._id) === (newBidId || '') || String(b._id) === previousBidId) continue;
+          if (!b.vendorProfileId) continue;
+          if (!['submitted', 'under_review', 'shortlisted'].includes(b.status)) continue;
+          await notify({
+            profileId: b.vendorProfileId,
+            type: 'tender_award_lost',
+            title: `Not awarded: ${tender.title}`,
+            content: `This package was awarded to ${publicWinnerName}. Thank you for participating.`,
+            relatedId: b._id!,
+            relatedType: 'bid',
+          });
+        }
+      } catch {
+        // Notifications are best-effort; the award itself is already saved
+      }
+    }
   }
 
   if (data.groupIds) setFields.groupIds = data.groupIds.map((gid) => new ObjectId(gid));
@@ -283,7 +373,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     await tenders.updateOne({ _id: new ObjectId(id) }, { $push: { documents: { $each: newDocs } } });
   }
 
-  await tenders.updateOne({ _id: new ObjectId(id) }, { $set: setFields });
+  const updateDoc: Record<string, unknown> = { $set: setFields };
+  if (Object.keys(unsetFields).length > 0) updateDoc.$unset = unsetFields;
+  await tenders.updateOne({ _id: new ObjectId(id) }, updateDoc);
   return NextResponse.json(await tenders.findOne({ _id: new ObjectId(id) }));
 }
 

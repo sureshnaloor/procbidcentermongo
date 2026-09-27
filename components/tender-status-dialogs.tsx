@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AlertCircle, CheckCircle2, XCircle, Trophy, Users, FileText, DollarSign, Calendar, MapPin, Building2, Pencil, ExternalLink, Loader2, Info } from "lucide-react";
+import { AlertCircle, CheckCircle2, XCircle, Trophy, Users, FileText, DollarSign, Calendar, MapPin, Building2, Pencil, ExternalLink, Loader2, Info, Lock } from "lucide-react";
 import { PROCUREMENT_TYPES } from "@/lib/procurement";
 import { formatDistanceToNow } from "date-fns";
 
@@ -222,12 +222,15 @@ interface AwardTenderDialogProps {
   onOpenChange: (open: boolean) => void;
   tender: any;
   bids?: any[];
+  /** Pre-select a specific bidder when opening (e.g. from the comparison sheet). */
+  initialBidId?: string;
   onConfirm: (payload: {
     awardedBidId?: string;
     awardedToVendorId?: string;
     awardedVendorName: string;
     awardedAmount?: number;
     awardedCurrency?: string;
+    awardMasked?: boolean;
     statusRemarks?: string;
   }) => void;
   isPending?: boolean;
@@ -238,28 +241,50 @@ export function AwardTenderDialog({
   onOpenChange,
   tender,
   bids = [],
+  initialBidId,
   onConfirm,
   isPending,
 }: AwardTenderDialogProps) {
   const [selectedBidId, setSelectedBidId] = useState<string>("");
   const [manualSupplierName, setManualSupplierName] = useState("");
   const [manualAmount, setManualAmount] = useState<string>("");
+  const [maskAward, setMaskAward] = useState(false);
   const [remarks, setRemarks] = useState("");
 
   const validBids = (bids || []).filter((b: any) => b.status && b.status !== "draft");
+  const isReAward = tender?.status === "awarded";
 
   useEffect(() => {
     if (open) {
-      if (validBids.length > 0) {
+      const currentAwardedBidId = tender?.awardedBidId ? String(tender.awardedBidId) : "";
+      const currentBid = currentAwardedBidId
+        ? validBids.find((b: any) => String(b._id) === currentAwardedBidId)
+        : undefined;
+      const preselect = initialBidId && validBids.some((b: any) => String(b._id) === initialBidId) ? initialBidId : "";
+      if (preselect) {
+        setSelectedBidId(preselect);
+      } else if (currentBid) {
+        setSelectedBidId(currentAwardedBidId);
+      } else if (isReAward && tender?.awardedVendorName && !currentAwardedBidId) {
+        setSelectedBidId("manual");
+        setManualSupplierName(tender.awardedVendorName);
+        setManualAmount(tender.awardedAmount != null ? String(tender.awardedAmount) : "");
+      } else if (validBids.length > 0) {
         setSelectedBidId(String(validBids[0]._id));
       } else {
         setSelectedBidId("manual");
       }
-      setManualSupplierName("");
-      setManualAmount("");
-      setRemarks("");
+      if (!isReAward) {
+        setManualSupplierName("");
+        setManualAmount("");
+      } else if (currentBid || preselect) {
+        setManualSupplierName("");
+        setManualAmount("");
+      }
+      setRemarks(tender?.statusRemarks || "");
+      setMaskAward(Boolean(tender?.awardMasked));
     }
-  }, [open, bids]);
+  }, [open, bids, initialBidId]);
 
   const selectedBid = validBids.find((b: any) => String(b._id) === selectedBidId);
 
@@ -272,6 +297,7 @@ export function AwardTenderDialog({
         awardedVendorName: vendorName,
         awardedAmount: selectedBid.totalPrice != null ? Number(selectedBid.totalPrice) : undefined,
         awardedCurrency: selectedBid.currency || tender?.currency || "USD",
+        awardMasked: maskAward,
         statusRemarks: remarks,
       });
     } else {
@@ -280,6 +306,7 @@ export function AwardTenderDialog({
         awardedVendorName: manualSupplierName.trim(),
         awardedAmount: manualAmount ? Number(manualAmount) : undefined,
         awardedCurrency: tender?.currency || "USD",
+        awardMasked: maskAward,
         statusRemarks: remarks,
       });
     }
@@ -291,10 +318,12 @@ export function AwardTenderDialog({
         <DialogHeader>
           <div className="flex items-center gap-2 text-primary mb-1">
             <Trophy className="h-5 w-5 text-amber-500" />
-            <DialogTitle>Mark Tender as Awarded</DialogTitle>
+            <DialogTitle>{isReAward ? "Change Awarded Supplier" : "Mark Tender as Awarded"}</DialogTitle>
           </div>
           <DialogDescription>
-            Select the winning supplier / accepted offer from the received bids to finalize this package.
+            {isReAward
+              ? "This package is already awarded. Select a different winning supplier below to correct the award, or keep the current selection."
+              : "Select the winning supplier / accepted offer from the received bids to finalize this package."}
           </DialogDescription>
         </DialogHeader>
 
@@ -312,6 +341,7 @@ export function AwardTenderDialog({
               <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
                 {validBids.map((b: any) => {
                   const isSelected = String(b._id) === selectedBidId;
+                  const isCurrentWinner = isReAward && tender?.awardedBidId && String(b._id) === String(tender.awardedBidId);
                   const supplierName = b.vendor?.companyName || b.offlineSupplier?.name || "Supplier";
                   return (
                     <div
@@ -334,6 +364,9 @@ export function AwardTenderDialog({
                           <div className="min-w-0">
                             <div className="font-semibold text-sm text-foreground truncate">
                               {supplierName}
+                              {isCurrentWinner && (
+                                <Badge variant="default" className="ml-2 text-[10px] py-0 bg-amber-500/90 text-white">Current Winner</Badge>
+                              )}
                             </div>
                             <div className="text-xs text-muted-foreground flex items-center gap-2 mt-0.5">
                               {b.isOffline ? (
@@ -411,6 +444,28 @@ export function AwardTenderDialog({
             </div>
           )}
 
+          <div
+            onClick={() => setMaskAward(!maskAward)}
+            className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+              maskAward ? "border-primary bg-primary/10" : "border-border hover:bg-muted/30"
+            }`}
+            id="mask-award-toggle"
+          >
+            <input
+              type="checkbox"
+              checked={maskAward}
+              onChange={() => setMaskAward(!maskAward)}
+              className="mt-0.5 h-4 w-4 text-primary"
+              id="mask-award-checkbox"
+            />
+            <div className="min-w-0">
+              <div className="text-sm font-medium text-foreground">Mask winner details from other suppliers</div>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Other participating suppliers will see the winner name and price as <span className="font-mono">*******</span> (redacted). The winning supplier always sees their own award. Default is public.
+              </p>
+            </div>
+          </div>
+
           <div className="space-y-1.5">
             <Label htmlFor="award-remarks" className="text-xs font-medium">
               Award Notes / Remarks <span className="text-muted-foreground">(Optional)</span>
@@ -442,7 +497,7 @@ export function AwardTenderDialog({
             id="confirm-award-btn"
           >
             {isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
-            Confirm Award
+            {isReAward ? "Save Award" : "Confirm Award"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -528,6 +583,7 @@ interface TenderSummaryModalProps {
   tender: any;
   onEditRemarks?: () => void;
   canEditRemarks?: boolean;
+  onEditAward?: () => void;
 }
 
 export function TenderSummaryModal({
@@ -536,6 +592,7 @@ export function TenderSummaryModal({
   tender,
   onEditRemarks,
   canEditRemarks,
+  onEditAward,
 }: TenderSummaryModalProps) {
   if (!tender) return null;
 
@@ -589,6 +646,11 @@ export function TenderSummaryModal({
                           ({tender.awardedCurrency || tender.currency} {Number(tender.awardedAmount).toLocaleString()})
                         </span>
                       )}
+                      {canEditRemarks && tender.awardMasked && (
+                        <Badge variant="outline" className="ml-2 align-middle text-[10px] font-semibold gap-1 border-amber-500/50 text-amber-600 dark:text-amber-400 bg-amber-500/10" title="Winner name and price are hidden from other suppliers">
+                          <Lock className="h-3 w-3" /> Masked
+                        </Badge>
+                      )}
                     </div>
                   )}
                   {tender.statusRemarks && (
@@ -605,17 +667,32 @@ export function TenderSummaryModal({
                 </div>
 
                 {canEditRemarks && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="shrink-0 text-xs h-7"
-                    onClick={() => {
-                      onOpenChange(false);
-                      onEditRemarks?.();
-                    }}
-                  >
-                    <Pencil className="h-3 w-3 mr-1" /> Edit Remarks
-                  </Button>
+                  <div className="flex flex-col gap-1.5 shrink-0">
+                    {tender.status === "awarded" && onEditAward && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-xs h-7"
+                        onClick={() => {
+                          onOpenChange(false);
+                          onEditAward();
+                        }}
+                      >
+                        <Trophy className="h-3 w-3 mr-1 text-amber-500" /> Change Award
+                      </Button>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-xs h-7"
+                      onClick={() => {
+                        onOpenChange(false);
+                        onEditRemarks?.();
+                      }}
+                    >
+                      <Pencil className="h-3 w-3 mr-1" /> Edit Remarks
+                    </Button>
+                  </div>
                 )}
               </div>
             </div>

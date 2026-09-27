@@ -23,7 +23,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!tender || tender.companyProfileId.toString() !== company._id!.toString()) {
     return NextResponse.json({ error: 'You can only revise offers on your own packages' }, { status: 403 });
   }
-  if (tender.status === 'awarded' || tender.status === 'cancelled') {
+  if (['closed', 'awarded', 'cancelled'].includes(tender.status)) {
     return NextResponse.json({ error: 'This package is no longer open for revisions' }, { status: 400 });
   }
   if (!VERBAL_REVISABLE_STATUSES.includes(bid.status)) {

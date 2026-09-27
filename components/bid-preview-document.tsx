@@ -20,7 +20,7 @@ export function BidPreviewDocument({ bid }: { bid: any }) {
   const commercial = bidCommercialBreakdown(bid);
 
   return (
-    <article className="bid-print-document bg-card text-black p-8 max-w-4xl mx-auto print:p-0 print:max-w-none">
+    <article className="bid-print-document bg-white text-black border border-black/10 shadow-[var(--shadow-card)] p-8 max-w-4xl mx-auto print:p-0 print:border-0 print:shadow-none print:max-w-none">
       <header className="border-b border-black/20 pb-4 mb-6">
         <p className="text-xs uppercase tracking-wide text-black/60">Offer document</p>
         <h1 className="text-2xl font-bold mt-1">{tenderTitle}</h1>

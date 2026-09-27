@@ -37,6 +37,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!allowed.ok) return NextResponse.json({ error: allowed.error }, { status: 403 });
 
   const tender = await tenders.findOne({ _id: bid.tenderId });
+  if (tender && ['closed', 'awarded', 'cancelled'].includes(tender.status)) {
+    return NextResponse.json({ error: 'This package is concluded. Offers can no longer be submitted.' }, { status: 400 });
+  }
   const requiredClauses = (tender?.clauses ?? []).filter((c) => c.required);
   for (const clause of requiredClauses) {
     const response = (bid.clauseResponses ?? []).find((r) => matchesClause(clause, r));

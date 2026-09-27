@@ -30,6 +30,9 @@ export async function GET() {
       location: 1,
       createdAt: 1,
       companyProfileId: 1,
+      awardedBidId: 1,
+      awardedVendorName: 1,
+      awardMasked: 1,
     })
     .sort({ createdAt: -1 })
     .limit(100)
@@ -43,8 +46,16 @@ export async function GET() {
     bids.find({
       tenderId: { $in: tenderIds },
       status: { $in: [...QUOTED_BID_STATUSES] },
-    }).project({ tenderId: 1, vendorProfileId: 1, status: 1 }).toArray(),
+    }).project({ tenderId: 1, vendorProfileId: 1, status: 1, offlineSupplier: 1, isOffline: 1 }).toArray(),
   ]);
+
+  // Resolve supplier display names for the filter dropdown
+  const vendorIds = [...new Map(offerRows.map((b) => [b.vendorProfileId.toString(), b.vendorProfileId])).values()];
+  const { profiles } = await collections();
+  const vendorDocs = vendorIds.length
+    ? await profiles.find({ _id: { $in: vendorIds } }).project({ companyName: 1 }).toArray()
+    : [];
+  const vendorNameById = new Map(vendorDocs.map((v) => [v._id!.toString(), v.companyName as string]));
 
   const invitesByTender = new Map<string, typeof invites>();
   for (const invite of invites) {
@@ -68,6 +79,13 @@ export async function GET() {
       const invited = tenderInv.filter((i) => isOfferAuthorized(i.status));
       const quotedVendorIds = new Set(tenderBids.map((b) => b.vendorProfileId.toString()));
       const notQuoted = invited.filter((i) => !quotedVendorIds.has(i.vendorProfileId.toString()));
+      const supplierNames = [...new Set(
+        tenderBids.map((b) =>
+          b.isOffline && b.offlineSupplier?.name
+            ? b.offlineSupplier.name
+            : vendorNameById.get(b.vendorProfileId.toString()) ?? null
+        ).filter((n): n is string => Boolean(n))
+      )];
       return {
         _id: tender._id,
         title: tender.title,
@@ -77,6 +95,10 @@ export async function GET() {
         currency: tender.currency,
         location: tender.location,
         createdAt: tender.createdAt,
+        awardedBidId: tender.awardedBidId,
+        awardedVendorName: tender.awardedVendorName,
+        awardMasked: tender.awardMasked,
+        supplierNames,
         invitedCount: invited.length,
         quotedCount: tenderBids.length,
         notQuotedCount: notQuoted.length,

@@ -29,6 +29,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!bid) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   const tender = await tenders.findOne({ _id: bid.tenderId });
   if (!tender) return NextResponse.json({ error: 'Tender not found' }, { status: 404 });
+  if (['closed', 'awarded', 'cancelled'].includes(tender.status)) {
+    return NextResponse.json({ error: 'This package is concluded. Revised offers can no longer be submitted.' }, { status: 400 });
+  }
 
   const profile = await getProfileForUser(auth.user.id);
   const isVendorOwner = profile?.userType === 'vendor' && bid.vendorProfileId.toString() === profile._id!.toString();

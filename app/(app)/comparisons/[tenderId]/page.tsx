@@ -10,8 +10,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, Loader2, Printer, FileSpreadsheet } from "lucide-react";
+import { ArrowLeft, Loader2, Printer, FileSpreadsheet, Trophy } from "lucide-react";
 import { BidComparisonStatement } from "@/components/bid-comparison-statement";
+import { AwardTenderDialog } from "@/components/tender-status-dialogs";
 import { MAX_COMPARISON_REMARKS, comparisonColumns, recommendedPaper, type PaperSize } from "@/lib/comparison";
 import { downloadBoqFile } from "@/lib/boq-browser";
 
@@ -24,6 +25,8 @@ export default function ComparisonStatementPage({ params }: { params: Promise<{ 
   const [designation, setDesignation] = useState("");
   const [remarks, setRemarks] = useState("");
   const [editLevel, setEditLevel] = useState<number | null>(null);
+  const [awardOpen, setAwardOpen] = useState(false);
+  const [awardBidId, setAwardBidId] = useState<string | undefined>(undefined);
 
   const { data: profile } = useQuery({
     queryKey: ["profile", "me"],
@@ -82,6 +85,26 @@ export default function ComparisonStatementPage({ params }: { params: Promise<{ 
     onError: (err: Error) => toast.error(err.message),
   });
 
+  const awardMutation = useMutation({
+    mutationFn: async (payload: Record<string, unknown>) => {
+      const res = await fetch(`/api/tenders/${tenderId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "awarded", ...payload }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Failed to award tender");
+      return json;
+    },
+    onSuccess: () => {
+      toast.success("Tender awarded — suppliers have been notified");
+      setAwardOpen(false);
+      qc.invalidateQueries({ queryKey: ["comparison", tenderId] });
+      qc.invalidateQueries({ queryKey: ["tenders"] });
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
   if (isLoading) {
     return <div className="flex justify-center py-16"><Loader2 className="animate-spin h-6 w-6 text-muted-foreground" /></div>;
   }
@@ -91,6 +114,14 @@ export default function ComparisonStatementPage({ params }: { params: Promise<{ 
 
   const existingRemarks: any[] = data.remarks ?? [];
   const canAdd = existingRemarks.length < MAX_COMPARISON_REMARKS;
+
+  // Award decision (company/admin only, while the package is open or already awarded)
+  const isAdmin = (session as { user?: { role?: string } } | null)?.user?.role === "admin";
+  const canAward =
+    (profile?.userType === "company" || isAdmin) &&
+    ["published", "awarded"].includes(data.tender.status);
+  const awardableBids = (data.bids ?? []).filter((b: any) => b.status && b.status !== "draft");
+  const currentAwardedBidId = data.tender.awardedBidId ? String(data.tender.awardedBidId) : "";
 
   function startEdit(remark: any) {
     setEditLevel(remark.level);
@@ -153,6 +184,76 @@ export default function ComparisonStatementPage({ params }: { params: Promise<{ 
       </div>
 
       <BidComparisonStatement data={{ ...data, bids: displayBids }} paper={paper} />
+
+      {canAward && awardableBids.length > 0 && (
+        <Card className="print:hidden glass card-3d border-0 rounded-2xl">
+          <CardHeader>
+            <CardTitle className="text-base font-[family-name:var(--font-heading)] flex items-center gap-2">
+              <Trophy className="h-4 w-4 text-amber-500" /> Award decision
+            </CardTitle>
+            <p className="text-xs text-muted-foreground">
+              {data.tender.status === "awarded"
+                ? "This package is awarded. Pick a different supplier to correct the award."
+                : "Ready to finalize? Award the winning supplier directly from here — all participants will be notified."}
+            </p>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {awardableBids.map((b: any) => {
+                const isWinner = currentAwardedBidId && String(b._id) === currentAwardedBidId;
+                const supplierName = b.vendor?.companyName || b.offlineSupplier?.name || "Supplier";
+                return (
+                  <div
+                    key={String(b._id)}
+                    className={`flex items-center justify-between gap-3 rounded-xl border p-3 transition-colors ${
+                      isWinner
+                        ? "border-amber-500/50 bg-amber-500/[0.07]"
+                        : "border-border bg-muted/20 hover:bg-muted/40"
+                    }`}
+                  >
+                    <div className="min-w-0">
+                      <div className="font-semibold text-sm text-foreground truncate flex items-center gap-1.5">
+                        {supplierName}
+                        {isWinner && (
+                          <span className="badge-celebrate-chip inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full shrink-0">
+                            <Trophy className="h-2.5 w-2.5" /> Awarded
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-0.5 font-mono">
+                        {b.currency || data.tender.currency} {b.totalPrice != null ? Number(b.totalPrice).toLocaleString() : "—"}
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant={isWinner ? "outline" : "default"}
+                      className="shrink-0 gap-1"
+                      onClick={() => {
+                        setAwardBidId(String(b._id));
+                        setAwardOpen(true);
+                      }}
+                      id={`award-bidder-${String(b._id).slice(-6)}`}
+                    >
+                      <Trophy className="h-3.5 w-3.5" />
+                      {isWinner ? "Review" : data.tender.status === "awarded" ? "Switch to this" : "Award"}
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <AwardTenderDialog
+        open={awardOpen}
+        onOpenChange={setAwardOpen}
+        tender={data.tender}
+        bids={data.bids ?? []}
+        initialBidId={awardBidId}
+        isPending={awardMutation.isPending}
+        onConfirm={(payload) => awardMutation.mutate(payload)}
+      />
 
       <Card className="print:hidden glass card-3d border-0 rounded-2xl">
         <CardHeader>

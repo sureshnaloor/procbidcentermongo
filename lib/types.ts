@@ -147,6 +147,7 @@ export interface ITender {
   awardedBidId?: ObjectId;
   awardedAmount?: number;
   awardedCurrency?: string;
+  awardMasked?: boolean;
   awardedAt?: Date;
   closedAt?: Date;
   cancelledAt?: Date;
@@ -367,6 +368,7 @@ export interface ITenderInvite {
   vendorProfileId: ObjectId;
   status: TenderInviteStatus;
   note?: string;
+  declineReason?: string;
   accessToken?: string;
   createdAt: Date;
   updatedAt: Date;
@@ -459,7 +461,9 @@ export type NotificationType =
   | 'invite_declined'
   | 'revision_requested'
   | 'revision_request_received'
-  | 'revision_request_declined';
+  | 'revision_request_declined'
+  | 'tender_awarded'
+  | 'tender_award_lost';
 
 export interface INotification {
   _id?: ObjectId;

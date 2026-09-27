@@ -18,6 +18,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const body = await req.json();
   const data = z.object({
     status: z.enum(['accepted', 'declined', 'revoked']),
+    reason: z.string().max(1000).optional(),
   }).parse(body);
 
   const { tenders, tenderInvites } = await collections();
@@ -53,6 +54,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   if (next === 'accepted' && !invite.accessToken) {
     setFields.accessToken = createOfferAccessToken();
   }
+  if (next === 'declined' && data.reason?.trim()) {
+    setFields.declineReason = data.reason.trim();
+  }
   await tenderInvites.updateOne({ _id: invite._id }, { $set: setFields });
   const updated = await tenderInvites.findOne({ _id: invite._id });
 
@@ -70,6 +74,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       profileId: next === 'declined' && isOwner ? invite.vendorProfileId : tender.companyProfileId,
       type: 'invite_declined',
       title: next === 'revoked' ? `Invite withdrawn: ${tender.title}` : `Participation declined: ${tender.title}`,
+      content: next === 'declined' && setFields.declineReason
+        ? `Reason: ${setFields.declineReason}`
+        : undefined,
       relatedId: tender._id,
       relatedType: 'tender',
     });

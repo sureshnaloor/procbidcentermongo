@@ -25,6 +25,9 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   }
 
   const tender = await tenders.findOne({ _id: bid.tenderId });
+  if (tender && ['closed', 'awarded', 'cancelled'].includes(tender.status)) {
+    return NextResponse.json({ error: 'This package is concluded. Offers can no longer be withdrawn.' }, { status: 400 });
+  }
   if (tender && !isBidDeadlineOpen(tender.bidDeadline)) {
     return NextResponse.json({ error: 'The bid deadline has passed. Offers can no longer be withdrawn.' }, { status: 400 });
   }

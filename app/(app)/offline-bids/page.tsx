@@ -336,11 +336,13 @@ function OfflinePackageCard({
             </div>
           </div>
           <div className="flex flex-wrap gap-2 shrink-0">
-            <OfflineInviteDialog
-              tenderId={String(row.tender._id)}
-              tenderTitle={row.tender.title}
-              onInvited={onRefresh}
-            />
+            {!isArchived && (
+              <OfflineInviteDialog
+                tenderId={String(row.tender._id)}
+                tenderTitle={row.tender.title}
+                onInvited={onRefresh}
+              />
+            )}
             <Button
               size="sm"
               variant="outline"
@@ -349,11 +351,18 @@ function OfflinePackageCard({
             >
               <Download className="h-3.5 w-3.5" /> Excel
             </Button>
-            <OfflineBidUploadDialog
-              tenderId={String(row.tender._id)}
-              tenderTitle={row.tender.title}
-              onUploaded={onRefresh}
-            />
+            {!isArchived && (
+              <OfflineBidUploadDialog
+                tenderId={String(row.tender._id)}
+                tenderTitle={row.tender.title}
+                onUploaded={onRefresh}
+              />
+            )}
+            {isArchived && (
+              <Badge variant="outline" className="text-[10px] font-semibold gap-1 text-muted-foreground">
+                <Archive className="h-3 w-3" /> Read-only
+              </Badge>
+            )}
           </div>
         </div>
 
@@ -376,7 +385,7 @@ function OfflinePackageCard({
                   {invite.status === "approved" ? "Approved" : "Pending approval"}
                 </Badge>
                 <div className="flex items-center gap-1">
-                  {invite.status !== "approved" && (
+                  {!isArchived && invite.status !== "approved" && (
                     <Button
                       size="sm"
                       variant="outline"
@@ -387,15 +396,17 @@ function OfflinePackageCard({
                       Approve
                     </Button>
                   )}
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                    disabled={inviteBusyId === String(invite._id)}
-                    onClick={() => removeInvite(String(row.tender._id), String(invite._id), invite.supplierName)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  {!isArchived && (
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                      disabled={inviteBusyId === String(invite._id)}
+                      onClick={() => removeInvite(String(row.tender._id), String(invite._id), invite.supplierName)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
                 </div>
               </div>
             ))}
@@ -434,15 +445,17 @@ function OfflinePackageCard({
                 <Link href={`/bids/${bid._id}`}>
                   <Button size="sm" variant="outline">View offer</Button>
                 </Link>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                  disabled={deletingId === String(bid._id)}
-                  onClick={() => removeBid(String(row.tender._id), String(bid._id), bid.supplier?.name ?? "this supplier")}
-                >
-                  {deletingId === String(bid._id) ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                </Button>
+                {!isArchived && (
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                    disabled={deletingId === String(bid._id)}
+                    onClick={() => removeBid(String(row.tender._id), String(bid._id), bid.supplier?.name ?? "this supplier")}
+                  >
+                    {deletingId === String(bid._id) ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                  </Button>
+                )}
               </div>
             </div>
           ))}

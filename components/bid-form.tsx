@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, type ChangeEvent } from "react";
+import { useState, useEffect, Fragment, type ChangeEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Plus, Trash2, ArrowLeft, Eye, Download, Upload } from "lucide-react";
+import { Loader2, Plus, Trash2, ArrowLeft, Eye, Download, Upload, LayoutList, Table as TableIcon } from "lucide-react";
 import Link from "next/link";
 import { clauseKey } from "@/lib/clauses";
 import { wordsDiffer } from "@/lib/text-diff";
@@ -197,6 +197,12 @@ export function BidForm({ tender, bid, mode }: { tender: any; bid?: any; mode: "
   const [boqSeeded, setBoqSeeded] = useState(mode !== "create");
   const [submitOpen, setSubmitOpen] = useState(false);
   const [boqBusy, setBoqBusy] = useState(false);
+  const [tab, setTab] = useState<"pricing" | "commercial" | "lines" | "proposals" | "terms">("pricing");
+  const [lineView, setLineView] = useState<"cards" | "table">("cards");
+  const [errors, setErrors] = useState<{
+    lines: Record<number, { description?: boolean; unitPrice?: boolean; qtyReason?: boolean }>;
+    clauses: Record<string, boolean>;
+  }>({ lines: {}, clauses: {} });
 
   const { data: profile } = useQuery({
     queryKey: ["profile", "me"],
@@ -360,6 +366,69 @@ export function BidForm({ tender, bid, mode }: { tender: any; bid?: any; mode: "
     });
   }
 
+  function clearLineError(i: number, field: "description" | "unitPrice" | "qtyReason") {
+    setErrors((prev) => {
+      const lineErr = prev.lines[i];
+      if (!lineErr || !lineErr[field]) return prev;
+      const nextLine = { ...lineErr, [field]: false };
+      const lines = { ...prev.lines };
+      if (!nextLine.description && !nextLine.unitPrice && !nextLine.qtyReason) delete lines[i];
+      else lines[i] = nextLine;
+      return { ...prev, lines };
+    });
+  }
+
+  function clearClauseError(key: string) {
+    setErrors((prev) => {
+      if (!prev.clauses[key]) return prev;
+      const clauses = { ...prev.clauses };
+      delete clauses[key];
+      return { ...prev, clauses };
+    });
+  }
+
+  /** Validates mandatory fields BEFORE opening the confirm dialog; flares offending fields red. */
+  function validateSubmit(): boolean {
+    const lineErrors: Record<number, { description?: boolean; unitPrice?: boolean; qtyReason?: boolean }> = {};
+    const clauseErrors: Record<string, boolean> = {};
+    let anyDescribed = false;
+    lineItems.forEach((line, i) => {
+      const described = Boolean(line.description.trim());
+      const hasOtherContent = Boolean(line.unitPrice.trim() || line.lineCode.trim() || line.notes.trim());
+      const entry: { description?: boolean; unitPrice?: boolean; qtyReason?: boolean } = {};
+      if (described) {
+        anyDescribed = true;
+        if (!line.unitPrice.trim()) entry.unitPrice = true;
+        if (quantityIssue(line)) entry.qtyReason = true;
+      } else if (hasOtherContent) {
+        entry.description = true;
+      }
+      if (Object.keys(entry).length > 0) lineErrors[i] = entry;
+    });
+    if (!anyDescribed) {
+      lineErrors[0] = { ...(lineErrors[0] ?? {}), description: true, unitPrice: true };
+    }
+    for (const c of tender?.clauses ?? []) {
+      if (!c.required) continue;
+      const key = clauseKey(c);
+      const mode = clauseModes[key];
+      if (mode !== "accepted" && mode !== "conditional") clauseErrors[key] = true;
+    }
+    const hasLineErrors = Object.keys(lineErrors).length > 0;
+    const hasClauseErrors = Object.keys(clauseErrors).length > 0;
+    setErrors({ lines: lineErrors, clauses: clauseErrors });
+    if (hasLineErrors || hasClauseErrors) {
+      setTab(hasLineErrors ? "lines" : "terms");
+      toast.error(
+        hasLineErrors
+          ? "Please complete the highlighted mandatory fields in Line Items."
+          : "Please accept (or accept with conditions) every required tender clause — highlighted in red."
+      );
+      return false;
+    }
+    return true;
+  }
+
   const mutation = useMutation({
     mutationFn: async (opts: { draft: boolean; preview?: boolean } & OfferConfirmPayload) => {
       const qtyIssue = lineItems.find((line) => line.description.trim() && quantityIssue(line));
@@ -427,6 +496,42 @@ export function BidForm({ tender, bid, mode }: { tender: any; bid?: any; mode: "
         </div>
       </div>
 
+      {/* Section tabs — drawer-style navigation between form sections */}
+      <div className="flex flex-wrap gap-1 rounded-xl border border-border/60 bg-muted/30 p-1 sticky top-2 z-10 backdrop-blur-md">
+        {([
+          { id: "pricing" as const, label: "Pricing & Terms", err: 0 },
+          { id: "commercial" as const, label: "Commercial Terms", err: 0 },
+          { id: "lines" as const, label: "Line Items", badge: lineItems.length, err: Object.keys(errors.lines).length },
+          { id: "proposals" as const, label: "Proposals", err: 0 },
+          ...((tender.clauses ?? []).length > 0
+            ? [{ id: "terms" as const, label: "Accept Tender Terms", err: Object.keys(errors.clauses).length }]
+            : []),
+        ]).map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => setTab(t.id)}
+            id={`bid-tab-${t.id}`}
+            className={`inline-flex items-center gap-1.5 px-3.5 h-9 rounded-lg text-sm font-medium transition-all ${
+              tab === t.id
+                ? "bg-primary text-primary-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground hover:bg-accent"
+            }`}
+          >
+            {t.label}
+            {"badge" in t && t.badge != null && (
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${tab === t.id ? "bg-primary-foreground/20" : "bg-muted"}`}>{t.badge}</span>
+            )}
+            {t.err > 0 && (
+              <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold px-1 animate-pulse">
+                {t.err}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {tab === "pricing" && (
       <Card className="glass border-0">
         <CardHeader><CardTitle className="text-base font-[family-name:var(--font-heading)]">Pricing & Terms</CardTitle></CardHeader>
         <CardContent className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -445,7 +550,9 @@ export function BidForm({ tender, bid, mode }: { tender: any; bid?: any; mode: "
           </div>
         </CardContent>
       </Card>
+      )}
 
+      {tab === "commercial" && (
       <Card className="glass border-0">
         <CardHeader>
           <CardTitle className="text-base font-[family-name:var(--font-heading)]">Commercial terms</CardTitle>
@@ -567,7 +674,9 @@ export function BidForm({ tender, bid, mode }: { tender: any; bid?: any; mode: "
           )}
         </CardContent>
       </Card>
+      )}
 
+      {tab === "lines" && (
       <Card className="glass border-0">
         <CardHeader className="flex-row items-start justify-between gap-3 space-y-0">
           <div>
@@ -577,6 +686,24 @@ export function BidForm({ tender, bid, mode }: { tender: any; bid?: any; mode: "
             </p>
           </div>
           <div className="flex flex-wrap gap-2 shrink-0 justify-end">
+            <div className="inline-flex rounded-lg border border-border/60 bg-muted/30 p-0.5 mr-1">
+              <button
+                type="button"
+                onClick={() => setLineView("cards")}
+                id="line-view-cards"
+                className={`inline-flex items-center gap-1 px-2.5 h-7 rounded-md text-xs font-medium transition-all ${lineView === "cards" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                <LayoutList className="h-3.5 w-3.5" /> Cards
+              </button>
+              <button
+                type="button"
+                onClick={() => setLineView("table")}
+                id="line-view-table"
+                className={`inline-flex items-center gap-1 px-2.5 h-7 rounded-md text-xs font-medium transition-all ${lineView === "table" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                <TableIcon className="h-3.5 w-3.5" /> Table
+              </button>
+            </div>
             <Button type="button" variant="outline" size="sm" onClick={downloadQuoteBoq} disabled={boqBusy} id="download-quote-boq-btn">
               {boqBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
               Download BOQ
@@ -602,7 +729,135 @@ export function BidForm({ tender, bid, mode }: { tender: any; bid?: any; mode: "
           {boqSeeded && mode === "create" && (
             <p className="text-xs text-muted-foreground">Quantities were copied from the buyer&apos;s BOQ. Use Change quantity if you must quote a different MOQ or packing quantity, and give a justification.</p>
           )}
-          {lineItems.map((line, i) => {
+          {lineView === "table" ? (
+            <div className="space-y-2">
+              <div className="overflow-x-auto rounded-lg border border-border">
+                <table className="w-full text-xs min-w-[980px]">
+                  <thead>
+                    <tr className="bg-muted/50 text-muted-foreground text-left">
+                      <th className="px-2 py-2 font-medium w-8">#</th>
+                      <th className="px-2 py-2 font-medium w-24">Code</th>
+                      <th className="px-2 py-2 font-medium min-w-48">Description</th>
+                      <th className="px-2 py-2 font-medium w-28">Qty</th>
+                      <th className="px-2 py-2 font-medium w-20">Unit</th>
+                      <th className="px-2 py-2 font-medium w-28">Unit price ({currency})</th>
+                      <th className="px-2 py-2 font-medium w-28">Line total</th>
+                      <th className="px-2 py-2 font-medium w-60">Delivery</th>
+                      <th className="px-2 py-2 font-medium min-w-36">Remarks</th>
+                      <th className="px-2 py-2 w-10" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {lineItems.map((line, i) => {
+                      const qty = parseAmount(line.quantity);
+                      const unitPrice = parseAmount(line.unitPrice);
+                      const total = qty * unitPrice;
+                      const locked = line.originalQuantity != null && !line.quantityUnlocked;
+                      const qtyChanged = line.originalQuantity != null && qty !== line.originalQuantity;
+                      const qtyError = quantityIssue(line);
+                      const lineErr = errors.lines[i];
+                      return (
+                        <Fragment key={i}>
+                          <tr className="border-t border-border/60 align-top">
+                            <td className="px-2 py-2 text-muted-foreground">{i + 1}</td>
+                            <td className="px-2 py-1.5">
+                              <Input className="h-8 text-xs" placeholder="Code" value={line.lineCode} onChange={(e) => setLine(i, { lineCode: e.target.value })} />
+                            </td>
+                            <td className="px-2 py-1.5">
+                              <Input
+                                className={`h-8 text-xs ${lineErr?.description ? "border-destructive ring-1 ring-destructive/40" : ""}`}
+                                placeholder="Material or service"
+                                value={line.description}
+                                onChange={(e) => { setLine(i, { description: e.target.value }); clearLineError(i, "description"); }}
+                              />
+                              {lineErr?.description && <p className="text-[10px] text-destructive font-medium mt-0.5">Description is required</p>}
+                            </td>
+                            <td className="px-2 py-1.5">
+                              <Input className="h-8 text-xs" type="number" min={0} step="any" value={line.quantity} disabled={locked} onChange={(e) => setLine(i, { quantity: e.target.value })} />
+                              {line.originalQuantity != null && (
+                                <div className="mt-0.5 flex items-center gap-1.5">
+                                  <span className="text-[10px] text-muted-foreground whitespace-nowrap">Inv: {line.originalQuantity}{qtyChanged ? ` → ${qty || 0}` : ""}</span>
+                                  {locked ? (
+                                    <button type="button" className="text-[10px] font-medium text-primary hover:underline" onClick={() => setLine(i, { quantityUnlocked: true })}>Change</button>
+                                  ) : (
+                                    <button type="button" className="text-[10px] font-medium text-muted-foreground hover:underline" onClick={() => setLine(i, { quantityUnlocked: false, quantity: String(line.originalQuantity), quantityChangeReason: "" })}>Reset</button>
+                                  )}
+                                </div>
+                              )}
+                            </td>
+                            <td className="px-2 py-1.5">
+                              <Input className="h-8 text-xs" value={line.unit} onChange={(e) => setLine(i, { unit: e.target.value })} />
+                            </td>
+                            <td className="px-2 py-1.5">
+                              <Input
+                                className={`h-8 text-xs ${lineErr?.unitPrice ? "border-destructive ring-1 ring-destructive/40" : ""}`}
+                                type="number" min={0} step="any" placeholder="0.00"
+                                value={line.unitPrice}
+                                onChange={(e) => { setLine(i, { unitPrice: e.target.value }); clearLineError(i, "unitPrice"); }}
+                              />
+                              {lineErr?.unitPrice && <p className="text-[10px] text-destructive font-medium mt-0.5">Unit price is required</p>}
+                            </td>
+                            <td className="px-2 py-2 font-semibold whitespace-nowrap">{formatAmount(total)}</td>
+                            <td className="px-2 py-1.5">
+                              <div className="flex gap-1">
+                                <Select value={line.deliveryMode} onValueChange={(v) => setLine(i, { deliveryMode: v as DeliveryMode })}>
+                                  <SelectTrigger className="h-8 text-xs w-28"><SelectValue /></SelectTrigger>
+                                  <SelectContent>
+                                    {DELIVERY_MODES.map((m) => (<SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>))}
+                                  </SelectContent>
+                                </Select>
+                                {line.deliveryMode === "date" ? (
+                                  <Input className="h-8 text-xs w-32" type="date" value={line.deliveryDate} onChange={(e) => setLine(i, { deliveryDate: e.target.value })} />
+                                ) : (
+                                  <Input className="h-8 text-xs w-20" type="number" min={1} step={1} placeholder="14" value={line.deliveryValue} onChange={(e) => setLine(i, { deliveryValue: e.target.value })} />
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-2 py-1.5">
+                              <Input className="h-8 text-xs" placeholder="Exceptions, packing, make…" value={line.notes} onChange={(e) => setLine(i, { notes: e.target.value })} />
+                            </td>
+                            <td className="px-2 py-1.5">
+                              <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => removeLine(i)} disabled={lineItems.length === 1}>
+                                <Trash2 className="h-3.5 w-3.5 text-destructive/70" />
+                              </Button>
+                            </td>
+                          </tr>
+                          {line.originalQuantity != null && line.quantityUnlocked && (
+                            <tr className="bg-muted/20">
+                              <td />
+                              <td colSpan={9} className="px-2 py-1.5">
+                                <div className="flex items-start gap-2">
+                                  <span className="text-[10px] font-medium text-muted-foreground pt-2 whitespace-nowrap">
+                                    Qty justification{qtyChanged ? " *" : ""}:
+                                  </span>
+                                  <div className="flex-1">
+                                    <Textarea
+                                      rows={1}
+                                      className={`text-xs min-h-8 ${lineErr?.qtyReason ? "border-destructive ring-1 ring-destructive/40" : ""}`}
+                                      placeholder="e.g. Minimum order quantity is 50 NOS / packing is in lots of 12"
+                                      value={line.quantityChangeReason}
+                                      onChange={(e) => { setLine(i, { quantityChangeReason: e.target.value }); clearLineError(i, "qtyReason"); }}
+                                    />
+                                    <p className={`text-[10px] mt-0.5 ${qtyError ? "text-destructive font-medium" : "text-muted-foreground"}`}>
+                                      {qtyError || `Required when the offered quantity differs from the invited quantity (min ${MIN_QTY_CHANGE_REASON} characters).`}
+                                    </p>
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Wide table — scroll horizontally if it overflows. Custom data fields (origin, OEM, brand…) are editable in Cards view.
+              </p>
+            </div>
+          ) : (
+          lineItems.map((line, i) => {
             const qty = parseAmount(line.quantity);
             const unitPrice = parseAmount(line.unitPrice);
             const total = qty * unitPrice;
@@ -617,7 +872,14 @@ export function BidForm({ tender, bid, mode }: { tender: any; bid?: any; mode: "
                       <Label htmlFor={`line-desc-${i}`}>Description</Label>
                       {line.lineCode ? <span className="text-[11px] font-mono text-muted-foreground">{line.lineCode}</span> : null}
                     </div>
-                    <Input id={`line-desc-${i}`} placeholder="Material or service" value={line.description} onChange={(e) => setLine(i, { description: e.target.value })} />
+                    <Input
+                      id={`line-desc-${i}`}
+                      placeholder="Material or service"
+                      value={line.description}
+                      className={errors.lines[i]?.description ? "border-destructive ring-1 ring-destructive/40" : ""}
+                      onChange={(e) => { setLine(i, { description: e.target.value }); clearLineError(i, "description"); }}
+                    />
+                    {errors.lines[i]?.description && <p className="text-[11px] text-destructive font-medium">Description is required</p>}
                   </div>
                   <Button type="button" variant="ghost" size="icon" className="mt-6 shrink-0" onClick={() => removeLine(i)} disabled={lineItems.length === 1}>
                     <Trash2 className="h-4 w-4 text-destructive/70" />
@@ -676,7 +938,14 @@ export function BidForm({ tender, bid, mode }: { tender: any; bid?: any; mode: "
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor={`line-price-${i}`}>Unit price ({currency})</Label>
-                    <Input id={`line-price-${i}`} type="number" min={0} step="any" placeholder="0.00" value={line.unitPrice} onChange={(e) => setLine(i, { unitPrice: e.target.value })} />
+                    <Input
+                      id={`line-price-${i}`}
+                      type="number" min={0} step="any" placeholder="0.00"
+                      value={line.unitPrice}
+                      className={errors.lines[i]?.unitPrice ? "border-destructive ring-1 ring-destructive/40" : ""}
+                      onChange={(e) => { setLine(i, { unitPrice: e.target.value }); clearLineError(i, "unitPrice"); }}
+                    />
+                    {errors.lines[i]?.unitPrice && <p className="text-[11px] text-destructive font-medium">Unit price is required</p>}
                   </div>
                   <div className="space-y-1.5">
                     <Label>Total line item price ({currency})</Label>
@@ -695,7 +964,8 @@ export function BidForm({ tender, bid, mode }: { tender: any; bid?: any; mode: "
                       rows={2}
                       placeholder="e.g. Minimum order quantity is 50 NOS / packing is in lots of 12"
                       value={line.quantityChangeReason}
-                      onChange={(e) => setLine(i, { quantityChangeReason: e.target.value })}
+                      className={errors.lines[i]?.qtyReason ? "border-destructive ring-1 ring-destructive/40" : ""}
+                      onChange={(e) => { setLine(i, { quantityChangeReason: e.target.value }); clearLineError(i, "qtyReason"); }}
                     />
                     <p className={`text-[11px] ${qtyError ? "text-destructive" : "text-muted-foreground"}`}>
                       {qtyError || `Required when the offered quantity differs from the invited quantity (min ${MIN_QTY_CHANGE_REASON} characters). Line and bid totals update automatically.`}
@@ -795,14 +1065,17 @@ export function BidForm({ tender, bid, mode }: { tender: any; bid?: any; mode: "
                 </div>
               </div>
             );
-          })}
+          })
+          )}
           <div className="flex items-center justify-between pt-2 border-t border-border text-sm">
             <span className="text-muted-foreground">Sum of line items ({currency})</span>
             <span className="font-semibold text-foreground">{formatAmount(lineTotal)}</span>
           </div>
         </CardContent>
       </Card>
+      )}
 
+      {tab === "proposals" && (
       <Card className="glass border-0">
         <CardHeader><CardTitle className="text-base font-[family-name:var(--font-heading)]">Proposals</CardTitle></CardHeader>
         <CardContent className="space-y-4">
@@ -820,8 +1093,9 @@ export function BidForm({ tender, bid, mode }: { tender: any; bid?: any; mode: "
           </div>
         </CardContent>
       </Card>
+      )}
 
-      {(tender.clauses ?? []).length > 0 && (
+      {tab === "terms" && (tender.clauses ?? []).length > 0 && (
         <Card className="glass border-0">
           <CardHeader>
             <CardTitle className="text-base font-[family-name:var(--font-heading)]">Accept tender terms</CardTitle>
@@ -833,8 +1107,9 @@ export function BidForm({ tender, bid, mode }: { tender: any; bid?: any; mode: "
               const clauseMode = clauseModes[key] || "";
               const edited = clauseBodies[key] ?? c.body ?? "";
               const modified = clauseMode === "conditional" && wordsDiffer(c.body, edited);
+              const clauseErr = Boolean(errors.clauses[key]);
               return (
-                <div key={key} className="rounded-lg border border-border p-3 space-y-3">
+                <div key={key} className={`rounded-lg border p-3 space-y-3 ${clauseErr ? "border-destructive ring-1 ring-destructive/30 bg-destructive/5" : "border-border"}`}>
                   <div className="flex items-center justify-between gap-2">
                     <div className="text-sm font-medium">{c.title}{c.required ? " *" : ""}</div>
                     {modified && <Badge variant="destructive">Edited</Badge>}
@@ -847,7 +1122,7 @@ export function BidForm({ tender, bid, mode }: { tender: any; bid?: any; mode: "
                         type="radio"
                         name={`clause-mode-${key}`}
                         checked={clauseMode === "accepted"}
-                        onChange={() => setClauseModes((prev) => ({ ...prev, [key]: "accepted" }))}
+                        onChange={() => { setClauseModes((prev) => ({ ...prev, [key]: "accepted" })); clearClauseError(key); }}
                         id={`accept-${key}`}
                       />
                       Accept as written
@@ -860,12 +1135,18 @@ export function BidForm({ tender, bid, mode }: { tender: any; bid?: any; mode: "
                         onChange={() => {
                           setClauseModes((prev) => ({ ...prev, [key]: "conditional" }));
                           setClauseBodies((prev) => ({ ...prev, [key]: prev[key] ?? c.body ?? "" }));
+                          clearClauseError(key);
                         }}
                         id={`accept-conditions-${key}`}
                       />
                       Accept with conditions (edit the terms)
                     </label>
                   </div>
+                  {clauseErr && (
+                    <p className="text-xs text-destructive font-medium">
+                      This clause is required — choose &quot;Accept as written&quot; or &quot;Accept with conditions&quot; before submitting.
+                    </p>
+                  )}
                   {clauseMode === "conditional" && (
                     <div className="space-y-2">
                       <Label htmlFor={`clause-edit-${key}`}>Proposed terms</Label>
@@ -897,7 +1178,7 @@ export function BidForm({ tender, bid, mode }: { tender: any; bid?: any; mode: "
         <Button variant="outline" onClick={() => mutation.mutate({ draft: true })} disabled={mutation.isPending} id="save-draft-btn">
           {mode === "revise" ? "Save progress" : "Save as Draft"}
         </Button>
-        <Button onClick={() => setSubmitOpen(true)} disabled={mutation.isPending} id="submit-bid-final-btn">
+        <Button onClick={() => { if (validateSubmit()) setSubmitOpen(true); }} disabled={mutation.isPending} id="submit-bid-final-btn">
           {mutation.isPending ? <><Loader2 className="animate-spin" />Saving...</> : mode === "revise" ? "Submit revised offer" : "Submit Offer"}
         </Button>
       </div>

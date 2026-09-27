@@ -82,7 +82,7 @@ export function BidComparisonStatement({
   const remarks: any[] = data.remarks ?? [];
 
   return (
-    <article className={`comparison-statement comparison-statement-${paper} bg-card text-black p-4 sm:p-6 print:p-0 overflow-x-auto print:overflow-visible`}>
+    <article className={`comparison-statement comparison-statement-${paper} bg-white text-black border border-black/10 rounded-sm shadow-[var(--shadow-card)] p-4 sm:p-6 print:p-0 print:border-0 print:shadow-none overflow-x-auto print:overflow-visible`}>
       {sets.map((set, setIdx) => (
         <section key={setIdx} className={`comparison-set ${setIdx > 0 ? "comparison-set-break" : ""}`}>
           <header className="border-b border-black/30 pb-3 mb-3">
@@ -126,7 +126,7 @@ export function BidComparisonStatement({
             <>
               <table className="w-full border-collapse text-[10px] mb-4">
                 <thead>
-                  <tr className="bg-muted">
+                  <tr className="bg-[#f4f2ee]">
                     <th className="border border-black/20 p-1.5 text-left w-[22%]">Line item</th>
                     {set.map((bid) => (
                       <th key={bid._id} className="border border-black/20 p-1.5 text-left align-top">
@@ -176,7 +176,7 @@ export function BidComparisonStatement({
                       })}
                     </tr>
                   ))}
-                  <tr className="bg-muted font-semibold">
+                  <tr className="bg-[#f4f2ee] font-semibold">
                     <td className="border border-black/20 p-1.5">Offer total</td>
                     {set.map((bid) => (
                       <td key={bid._id} className="border border-black/20 p-1.5">
@@ -226,7 +226,7 @@ export function BidComparisonStatement({
               ) : (
                 <table className="w-full border-collapse text-[10px] mb-4">
                   <thead>
-                    <tr className="bg-muted">
+                    <tr className="bg-[#f4f2ee]">
                       <th className="border border-black/20 p-1.5 text-left w-[22%]">Clause</th>
                       {set.map((bid) => (
                         <th key={bid._id} className="border border-black/20 p-1.5 text-left">{bid.vendor?.companyName}</th>
@@ -259,7 +259,7 @@ export function BidComparisonStatement({
               <h2 className="text-[11px] font-bold uppercase tracking-wide mb-1">Payment terms and supplier remarks</h2>
               <table className="w-full border-collapse text-[10px] mb-4">
                 <thead>
-                  <tr className="bg-muted">
+                  <tr className="bg-[#f4f2ee]">
                     <th className="border border-black/20 p-1.5 text-left w-[22%]">Item</th>
                     {set.map((bid) => (
                       <th key={bid._id} className="border border-black/20 p-1.5 text-left">{bid.vendor?.companyName}</th>
