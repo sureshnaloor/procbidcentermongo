@@ -59,6 +59,14 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
     queryFn: () => fetch(`/api/tenders/${id}/invites`).then((r) => r.json()),
     enabled: !!tender,
   });
+
+  // Suppliers who have actually submitted an offer (not draft) — shown as "Quoted"
+  const quotedBidByVendor = new Map<string, any>();
+  for (const b of bids as any[]) {
+    if (b.status && b.status !== "draft" && b.vendorProfileId) {
+      quotedBidByVendor.set(String(b.vendorProfileId), b);
+    }
+  }
   const { data: vendorsData } = useQuery({
     queryKey: ["vendors", "invite-list"],
     queryFn: () => fetch("/api/profile/list?userType=vendor&limit=100").then((r) => r.json()),
@@ -619,10 +627,19 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
             <div className="grid gap-2">
               {(invites as any[]).length === 0 ? (
                 <p className="text-sm text-muted-foreground py-6 text-center">No invitations or requests yet</p>
-              ) : (invites as any[]).map((inv: any) => (
+              ) : (invites as any[]).map((inv: any) => {
+                const quotedBid = quotedBidByVendor.get(String(inv.vendorProfileId));
+                return (
                 <div key={inv._id} className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
                   <div>
-                    <div className="text-sm font-medium">{inv.vendor?.companyName ?? "Supplier"}</div>
+                    <div className="flex items-center gap-2">
+                      <div className="text-sm font-medium">{inv.vendor?.companyName ?? "Supplier"}</div>
+                      {quotedBid && (
+                        <Badge variant="success" className="gap-1">
+                          <CheckCircle2 className="h-3 w-3" /> Quoted
+                        </Badge>
+                      )}
+                    </div>
                     <div className="text-xs text-muted-foreground capitalize">{inv.status}</div>
                     {inv.status === "declined" && inv.declineReason && (
                       <div className="mt-1.5 text-xs text-muted-foreground bg-muted/50 border border-border/60 rounded-md px-2 py-1.5 max-w-md">
@@ -631,31 +648,40 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
                     )}
                   </div>
                   <div className="flex items-center gap-2">
-                    {inv.offerPath && (inv.status === "invited" || inv.status === "accepted") && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={async () => {
-                          const url = `${window.location.origin}${inv.offerPath}`;
-                          await navigator.clipboard.writeText(url);
-                          toast.success("Vendor link copied");
-                        }}
-                      >
-                        <Copy className="h-3.5 w-3.5" /> Copy link
-                      </Button>
-                    )}
-                    {inv.status === "requested" && (
+                    {quotedBid ? (
+                      <Link href={`/bids/${quotedBid._id}`}>
+                        <Button size="sm" variant="outline">View offer</Button>
+                      </Link>
+                    ) : (
                       <>
-                        <Button size="sm" onClick={() => updateInviteMutation.mutate({ inviteId: inv._id, status: "accepted" })}>Accept</Button>
-                        <Button size="sm" variant="outline" onClick={() => updateInviteMutation.mutate({ inviteId: inv._id, status: "declined" })}>Decline</Button>
+                        {inv.offerPath && (inv.status === "invited" || inv.status === "accepted") && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={async () => {
+                              const url = `${window.location.origin}${inv.offerPath}`;
+                              await navigator.clipboard.writeText(url);
+                              toast.success("Vendor link copied");
+                            }}
+                          >
+                            <Copy className="h-3.5 w-3.5" /> Copy link
+                          </Button>
+                        )}
+                        {inv.status === "requested" && (
+                          <>
+                            <Button size="sm" onClick={() => updateInviteMutation.mutate({ inviteId: inv._id, status: "accepted" })}>Accept</Button>
+                            <Button size="sm" variant="outline" onClick={() => updateInviteMutation.mutate({ inviteId: inv._id, status: "declined" })}>Decline</Button>
+                          </>
+                        )}
+                        {(inv.status === "invited" || inv.status === "accepted") && (
+                          <Button size="sm" variant="ghost" onClick={() => updateInviteMutation.mutate({ inviteId: inv._id, status: "revoked" })}>Revoke</Button>
+                        )}
                       </>
-                    )}
-                    {(inv.status === "invited" || inv.status === "accepted") && (
-                      <Button size="sm" variant="ghost" onClick={() => updateInviteMutation.mutate({ inviteId: inv._id, status: "revoked" })}>Revoke</Button>
                     )}
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </TabsContent>
         )}

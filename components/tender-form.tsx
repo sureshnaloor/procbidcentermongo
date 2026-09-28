@@ -93,6 +93,14 @@ export function TenderForm({ mode, tender }: TenderFormProps) {
   const [pendingType, setPendingType] = useState<TenderType | null>(null);
   const [saveIntent, setSaveIntent] = useState<"draft" | "publish">("draft");
   const [publishOpen, setPublishOpen] = useState(false);
+  type TenderFormTab = "basics" | "schedule" | "groups" | "boq" | "terms" | "remarks" | "attachments";
+  interface TenderFormErrors { title?: boolean; groups?: boolean; deadlines?: boolean; boq?: boolean; docs?: boolean }
+  const [tab, setTab] = useState<TenderFormTab>("basics");
+  const [errors, setErrors] = useState<TenderFormErrors>({});
+
+  function clearError(key: keyof TenderFormErrors) {
+    setErrors((prev) => (prev[key] ? { ...prev, [key]: false } : prev));
+  }
 
   const { data: groupsWithTypes = [], isLoading: loadingGroups } = useQuery({
     queryKey: ["master", "groups-with-types"],
@@ -178,6 +186,7 @@ export function TenderForm({ mode, tender }: TenderFormProps) {
   function applyType(next: TenderType) {
     setForm((prev) => ({ ...prev, type: next }));
     setFileCategory(defaultDocumentCategory(next));
+    if (next === "rfp") setTab((prev) => (prev === "boq" ? "basics" : prev));
   }
 
   function requestTypeChange(next: TenderType) {
@@ -190,6 +199,7 @@ export function TenderForm({ mode, tender }: TenderFormProps) {
   }
 
   const handleGroupToggle = (groupId: string) => {
+    clearError("groups");
     setForm((prev) => {
       const exists = prev.groupIds.includes(groupId);
       return {
@@ -204,6 +214,7 @@ export function TenderForm({ mode, tender }: TenderFormProps) {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFiles = e.target.files;
     if (!selectedFiles) return;
+    clearError("docs");
 
     Array.from(selectedFiles).forEach((file) => {
       if (file.size > 20 * 1024 * 1024) {
@@ -273,6 +284,7 @@ export function TenderForm({ mode, tender }: TenderFormProps) {
       if (!res.ok) throw new Error(data.error || "Could not parse BOQ");
       const items = Array.isArray(data.items) ? data.items : [];
       setBoqItems(items.length ? items : [{ lineCode: "BOQ-001", description: "", quantity: 1, unit: "unit" }]);
+      if (items.length) clearError("boq");
       setFiles((prev) => [
         ...prev.filter((f) => f.fileName !== file.name),
         {
@@ -369,12 +381,18 @@ export function TenderForm({ mode, tender }: TenderFormProps) {
   });
 
   const validateBase = () => {
-    if (!form.title.trim()) {
-      toast.error("Title is required");
+    const next: TenderFormErrors = {};
+    if (!form.title.trim()) next.title = true;
+    if (form.groupIds.length === 0) next.groups = true;
+    setErrors(next);
+    if (next.title) {
+      setTab("basics");
+      toast.error("A title is required — the field is highlighted in red.");
       return false;
     }
-    if (form.groupIds.length === 0) {
-      toast.error("Please select at least one material/service group");
+    if (next.groups) {
+      setTab("groups");
+      toast.error("Please select at least one material/service group — highlighted in red.");
       return false;
     }
     if (!hasGroups) {
@@ -393,6 +411,16 @@ export function TenderForm({ mode, tender }: TenderFormProps) {
   const handlePublish = () => {
     if (!validateBase()) return;
     if (allPublishBlockers.length > 0) {
+      const next: TenderFormErrors = {};
+      if (publishDates.blockers.length > 0) next.deadlines = true;
+      if (publishBlockers.length > 0) {
+        if (form.type === "rfq") next.boq = true;
+        else next.docs = true;
+      }
+      setErrors((prev) => ({ ...prev, ...next }));
+      if (next.deadlines) setTab("schedule");
+      else if (next.boq) setTab("boq");
+      else if (next.docs) setTab("attachments");
       toast.error(allPublishBlockers[0]);
       return;
     }
@@ -416,18 +444,56 @@ export function TenderForm({ mode, tender }: TenderFormProps) {
   }, [form.type]);
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6 animate-fade-in-up" id="tender-form">
+    <form onSubmit={handleSubmit} noValidate className="space-y-6 animate-fade-in-up" id="tender-form">
+      {/* Section tabs — drawer-style navigation between form sections */}
+      <div className="flex flex-wrap gap-1 rounded-xl border border-border/60 bg-muted/30 p-1 sticky top-2 z-10 backdrop-blur-md">
+        {([
+          { id: "basics" as const, label: "Basics", err: errors.title ? 1 : 0 },
+          { id: "schedule" as const, label: "Deadlines & Value", err: errors.deadlines ? 1 : 0 },
+          { id: "groups" as const, label: "Groups", err: errors.groups ? 1 : 0 },
+          ...(showBoqEditor ? [{ id: "boq" as const, label: "BOQ", badge: validBoqItems.length, err: errors.boq ? 1 : 0 }] : []),
+          { id: "terms" as const, label: "Terms & Requirements", err: 0 },
+          ...(mode === "edit" ? [{ id: "remarks" as const, label: "Remarks", err: 0 }] : []),
+          { id: "attachments" as const, label: "Attachments", err: errors.docs ? 1 : 0 },
+        ]).map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => setTab(t.id)}
+            id={`tender-tab-${t.id}`}
+            className={`inline-flex items-center gap-1.5 px-3.5 h-9 rounded-lg text-sm font-medium transition-all ${
+              tab === t.id
+                ? "bg-primary text-primary-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground hover:bg-accent"
+            }`}
+          >
+            {t.label}
+            {"badge" in t && t.badge != null && t.badge > 0 && (
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${tab === t.id ? "bg-primary-foreground/20" : "bg-muted"}`}>{t.badge}</span>
+            )}
+            {t.err > 0 && (
+              <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold px-1 animate-pulse">
+                {t.err}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {tab === "basics" && (
       <Card className="glass border-0">
         <CardContent className="pt-6 space-y-4">
           <div className="space-y-1.5">
-            <Label htmlFor="tender-title">{typeMeta.label} Title</Label>
+            <Label htmlFor="tender-title">{typeMeta.label} Title <span className="text-destructive">*</span></Label>
             <Input
               id="tender-title"
               value={form.title}
-              onChange={(e) => setField("title", e.target.value)}
+              onChange={(e) => { setField("title", e.target.value); clearError("title"); }}
               placeholder="e.g. EPC Construction of Solar Substation"
+              className={errors.title ? "border-destructive ring-1 ring-destructive/40" : ""}
               required
             />
+            {errors.title && <p className="text-[11px] text-destructive font-medium">Title is required</p>}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -476,10 +542,15 @@ export function TenderForm({ mode, tender }: TenderFormProps) {
           </div>
         </CardContent>
       </Card>
+      )}
 
-      <Card className="glass border-0">
+      {tab === "schedule" && (
+      <Card className={`glass border-0 ${errors.deadlines ? "ring-1 ring-destructive/40" : ""}`}>
         <CardContent className="pt-6 space-y-4">
           <h3 className="font-semibold text-sm text-foreground">Deadlines & Value</h3>
+          {errors.deadlines && publishDates.blockers.length > 0 && (
+            <p className="text-xs text-destructive font-medium">{publishDates.blockers[0]}</p>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label htmlFor="bid-deadline" className="flex items-center gap-1.5">
@@ -490,7 +561,8 @@ export function TenderForm({ mode, tender }: TenderFormProps) {
                 id="bid-deadline"
                 type="date"
                 value={form.bidDeadline}
-                onChange={(e) => setField("bidDeadline", e.target.value)}
+                className={errors.deadlines && !form.bidDeadline ? "border-destructive ring-1 ring-destructive/40" : ""}
+                onChange={(e) => { setField("bidDeadline", e.target.value); clearError("deadlines"); }}
               />
               <p className="text-[11px] text-muted-foreground">Required to publish. Must be a future date.</p>
             </div>
@@ -504,7 +576,8 @@ export function TenderForm({ mode, tender }: TenderFormProps) {
                 id="delivery-deadline"
                 type="date"
                 value={form.deliveryDeadline}
-                onChange={(e) => setField("deliveryDeadline", e.target.value)}
+                className={errors.deadlines && !form.deliveryDeadline ? "border-destructive ring-1 ring-destructive/40" : ""}
+                onChange={(e) => { setField("deliveryDeadline", e.target.value); clearError("deadlines"); }}
               />
               <p className="text-[11px] text-muted-foreground">Required to publish. Must be in the future and on or after the bid deadline.</p>
             </div>
@@ -577,12 +650,17 @@ export function TenderForm({ mode, tender }: TenderFormProps) {
           </div>
         </CardContent>
       </Card>
+      )}
 
-      <Card className="glass border-0">
+      {tab === "groups" && (
+      <Card className={`glass border-0 ${errors.groups ? "ring-1 ring-destructive/40" : ""}`}>
         <CardContent className="pt-6 space-y-4">
           <div>
-            <h3 className="font-semibold text-sm text-foreground">Material & Service Groups</h3>
+            <h3 className="font-semibold text-sm text-foreground">Material & Service Groups <span className="text-destructive">*</span></h3>
             <p className="text-xs text-muted-foreground mt-0.5">Select at least one group relevant to this package</p>
+            {errors.groups && (
+              <p className="text-xs text-destructive font-medium mt-1">At least one group must be selected before saving.</p>
+            )}
           </div>
 
           {loadingGroups ? (
@@ -655,9 +733,10 @@ export function TenderForm({ mode, tender }: TenderFormProps) {
           )}
         </CardContent>
       </Card>
+      )}
 
-      {showBoqEditor && (
-        <Card className="glass border-0">
+      {tab === "boq" && showBoqEditor && (
+        <Card className={`glass border-0 ${errors.boq ? "ring-1 ring-destructive/40" : ""}`}>
           <CardContent className="pt-6 space-y-4">
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -670,6 +749,9 @@ export function TenderForm({ mode, tender }: TenderFormProps) {
                     ? "Upload an Excel/CSV BOQ or add lines here. An RFQ cannot be published until a BOQ is attached."
                     : "Optional for tenders. Upload Excel/CSV or type materials and service quantities."}
                 </p>
+                {errors.boq && (
+                  <p className="text-xs text-destructive font-medium mt-1">A BOQ with at least one valid line (description + quantity) is required to publish this RFQ.</p>
+                )}
               </div>
               <div className="flex flex-wrap gap-2 shrink-0 justify-end">
                 <Button type="button" variant="outline" size="sm" onClick={downloadBoqTemplate} disabled={boqBusy} id="download-boq-template-btn">
@@ -720,7 +802,7 @@ export function TenderForm({ mode, tender }: TenderFormProps) {
                     className="col-span-12 sm:col-span-5"
                     placeholder="Material or service description"
                     value={line.description}
-                    onChange={(e) => setBoqItems((prev) => prev.map((item, idx) => idx === i ? { ...item, description: e.target.value } : item))}
+                    onChange={(e) => { clearError("boq"); setBoqItems((prev) => prev.map((item, idx) => idx === i ? { ...item, description: e.target.value } : item)); }}
                   />
                   <Input
                     className="col-span-5 sm:col-span-2"
@@ -753,6 +835,7 @@ export function TenderForm({ mode, tender }: TenderFormProps) {
         </Card>
       )}
 
+      {tab === "terms" && (
       <Card className="glass border-0">
         <CardContent className="pt-6 space-y-4">
           <div className="flex items-start justify-between gap-3">
@@ -876,8 +959,9 @@ export function TenderForm({ mode, tender }: TenderFormProps) {
           ))}
         </CardContent>
       </Card>
+      )}
 
-      {mode === "edit" && (
+      {tab === "remarks" && mode === "edit" && (
         <Card className="glass border-0">
           <CardContent className="pt-6 space-y-4">
             <div>
@@ -899,11 +983,15 @@ export function TenderForm({ mode, tender }: TenderFormProps) {
         </Card>
       )}
 
-      <Card className="glass border-0">
+      {tab === "attachments" && (
+      <Card className={`glass border-0 ${errors.docs ? "ring-1 ring-destructive/40" : ""}`}>
         <CardContent className="pt-6 space-y-4">
           <div>
             <h3 className="font-semibold text-sm text-foreground">Attachments</h3>
             <p className="text-xs text-muted-foreground mt-0.5">{requiredCategoryHint} Max 20MB per file.</p>
+            {errors.docs && (
+              <p className="text-xs text-destructive font-medium mt-1">{requiredCategoryHint.replace(/^Required to publish: /, "")}</p>
+            )}
           </div>
 
           {tender?.documents?.length > 0 && (
@@ -980,6 +1068,7 @@ export function TenderForm({ mode, tender }: TenderFormProps) {
           )}
         </CardContent>
       </Card>
+      )}
 
       {isDraft && allPublishBlockers.length > 0 && (
         <div className="flex items-start gap-2 rounded-lg border border-primary/30 bg-primary/10 p-3 text-sm text-foreground">
@@ -1005,7 +1094,7 @@ export function TenderForm({ mode, tender }: TenderFormProps) {
                 "Save as Draft"
               )}
             </Button>
-            <Button type="button" onClick={handlePublish} disabled={mutation.isPending || !hasGroups || allPublishBlockers.length > 0} id="submit-tender-form-btn">
+            <Button type="button" onClick={handlePublish} disabled={mutation.isPending || !hasGroups} id="submit-tender-form-btn">
               {mutation.isPending && saveIntent === "publish" ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
