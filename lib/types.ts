@@ -84,6 +84,7 @@ export interface IMaterialServiceItem {
   groupId: ObjectId;
   code: string;
   description?: string;
+  unit?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -390,6 +391,36 @@ export interface IVendorQualification {
   groupId: ObjectId;
   status: QualificationStatus;
   qualifiedBy?: ObjectId;
+  notes?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// ─── Vendor Evaluation & Grading ───────────────────────────────────────────
+export type EvaluationGrade = 'A' | 'B' | 'C' | 'D';
+export type EvaluationRecommendation = 'preferred' | 'approved' | 'conditional' | 'under_review' | 'not_recommended';
+
+export interface IEvaluationCriteriaScores {
+  quality: number; // 1 to 5
+  delivery: number; // 1 to 5
+  pricing: number; // 1 to 5
+  technical: number; // 1 to 5
+  responsiveness: number; // 1 to 5
+}
+
+export interface IVendorEvaluation {
+  _id?: ObjectId;
+  companyProfileId: ObjectId;
+  vendorProfileId: ObjectId;
+  evaluatorUserId: ObjectId;
+  evaluatorName?: string;
+  periodOrProject?: string;
+  grade: EvaluationGrade;
+  overallScore: number; // 0 - 100
+  scores: IEvaluationCriteriaScores;
+  recommendation: EvaluationRecommendation;
+  strengths?: string;
+  areasForImprovement?: string;
   notes?: string;
   createdAt: Date;
   updatedAt: Date;

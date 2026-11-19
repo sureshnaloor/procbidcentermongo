@@ -4,7 +4,6 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
-import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { FileText, Loader2, Scale, CalendarClock, Calendar, Clock, Archive, Trophy, Lock } from "lucide-react";
@@ -88,7 +87,10 @@ export default function ComparisonsPage() {
 
   return (
     <div className="space-y-6 animate-fade-in-up">
-      <div>
+      <div className="space-y-2">
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-primary/10 text-primary text-[11px] font-bold uppercase tracking-wider">
+          <Scale size={11} /> Bid Leveling &amp; Comparison
+        </span>
         <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground font-[family-name:var(--font-heading)] text-gradient">
           Comparison of Bids
         </h1>
@@ -98,9 +100,9 @@ export default function ComparisonsPage() {
       </div>
 
       {items.length === 0 ? (
-        <div className="text-center py-16 rounded-2xl border border-dashed border-border bg-muted/20">
-          <div className="mx-auto mb-3 inline-flex items-center justify-center h-12 w-12 rounded-full bg-muted">
-            <Scale className="h-6 w-6 text-muted-foreground" />
+        <div className="text-center py-16 rounded-3xl border border-dashed border-border bg-card card-3d">
+          <div className="mx-auto mb-3 inline-flex items-center justify-center h-14 w-14 rounded-2xl bg-primary/10">
+            <Scale className="h-7 w-7 text-primary" />
           </div>
           <p className="text-muted-foreground font-medium">No issued RFQs, RFPs, or tenders yet.</p>
         </div>
@@ -186,8 +188,9 @@ function ComparisonCard({ tender, isArchived }: { tender: any; isArchived: boole
   const issuedDate = tender.createdAt ? format(new Date(tender.createdAt), "dd MMM yyyy") : null;
 
   return (
-    <Card className={`border border-border rounded-2xl shadow-[var(--shadow-card)] transition-all duration-200 ${isArchived ? "bg-card/70" : "bg-card"}`}>
-      <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+    <div className={`group relative bg-card border rounded-2xl card-3d card-sheen hover:border-primary/40 overflow-hidden ${isArchived ? "bg-card/70 border-border/40" : "border-border"}`}>
+      <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-primary/60 via-primary/20 to-transparent" />
+      <div className="p-4 flex flex-col sm:flex-row sm:items-center gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-center gap-2 mb-1.5">
             <Badge variant="outline" className="text-[10px] uppercase font-bold">{typeMeta?.label ?? tender.type}</Badge>
@@ -231,11 +234,11 @@ function ComparisonCard({ tender, isArchived }: { tender: any; isArchived: boole
           </div>
         </div>
         <Link href={`/comparisons/${tender._id}`}>
-          <Button size="sm" id={`comparison-statement-${tender._id}`}>
+          <Button size="sm" className="rounded-xl shadow-md shadow-primary/20" id={`comparison-statement-${tender._id}`}>
             <FileText className="h-3.5 w-3.5" /> Comparison statement
           </Button>
         </Link>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }

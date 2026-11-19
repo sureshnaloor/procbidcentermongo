@@ -5,7 +5,6 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Plus, FileText, CalendarClock, Calendar, MapPin, Loader2, Building2, Pencil, DollarSign, RefreshCw, AlertTriangle, Clock, Archive, Trophy, XCircle, CheckCircle2, Eye, Lock, Ban } from "lucide-react";
@@ -194,7 +193,10 @@ export default function TendersPage() {
   return (
     <div className="space-y-6 animate-fade-in-up">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
+        <div className="space-y-2">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-primary/10 text-primary text-[11px] font-bold uppercase tracking-wider">
+            <FileText size={11} /> Tender Packages
+          </span>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground font-[family-name:var(--font-heading)] text-gradient">
             Tenders
           </h1>
@@ -211,7 +213,7 @@ export default function TendersPage() {
           {isCompany && (
             profile?.isVerified ? (
               <Link href="/tenders/new">
-                <Button size="sm" id="new-tender-top-btn"><Plus /> New Tender</Button>
+                <Button size="sm" id="new-tender-top-btn" className="rounded-xl shadow-md shadow-primary/20"><Plus /> New Tender</Button>
               </Link>
             ) : (
               <Button size="sm" variant="outline" disabled title="Super Admin verification required" id="new-tender-top-btn">
@@ -223,6 +225,7 @@ export default function TendersPage() {
             <Button
               size="sm"
               variant="outline"
+              className="rounded-xl border-border hover:border-primary/40"
               onClick={() => setBrowseAll((v) => !v)}
               id="toggle-vendor-tenders-btn"
             >
@@ -235,9 +238,9 @@ export default function TendersPage() {
       {isLoading || loadingProfile ? (
         <div className="flex items-center justify-center py-16"><Loader2 className="animate-spin h-6 w-6 text-muted-foreground" /></div>
       ) : tenders.length === 0 ? (
-        <div className="text-center py-16 rounded-2xl border border-dashed border-border bg-muted/20">
-          <div className="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center mx-auto mb-4">
-            <FileText className="h-7 w-7 text-muted-foreground" />
+        <div className="text-center py-16 rounded-3xl border border-dashed border-border bg-card card-3d">
+          <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
+            <FileText className="h-7 w-7 text-primary" />
           </div>
           <p className="text-muted-foreground font-medium">
             {isVendor && vendorMine
@@ -247,10 +250,10 @@ export default function TendersPage() {
                 : "No tenders found"}
           </p>
           {isCompany && (
-            <Link href="/tenders/new"><Button variant="outline" className="mt-4" size="sm">Create your first tender</Button></Link>
+            <Link href="/tenders/new"><Button variant="outline" className="mt-4 rounded-xl" size="sm">Create your first tender</Button></Link>
           )}
           {isVendor && vendorMine && (
-            <Button variant="outline" className="mt-4" size="sm" onClick={() => setBrowseAll(true)}>Browse published packages</Button>
+            <Button variant="outline" className="mt-4 rounded-xl" size="sm" onClick={() => setBrowseAll(true)}>Browse published packages</Button>
           )}
         </div>
       ) : (
@@ -471,8 +474,9 @@ function CompanyTenderCard({
   const bidsCount = t.bidsCount ?? (Array.isArray(t.bids) ? t.bids.length : 0);
 
   return (
-    <Card className={`card-3d hover:border-primary/30 group border-0 ${isArchived ? "bg-muted/15 border-border/40" : ""}`}>
-      <CardContent className="p-5 space-y-3">
+    <div className={`group relative bg-card border rounded-2xl card-3d card-sheen hover:border-primary/40 overflow-hidden ${isArchived ? "bg-muted/15 border-border/40" : "border-border"}`}>
+      <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-primary/60 via-primary/20 to-transparent" />
+      <div className="p-5 space-y-3">
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1.5 flex-wrap">
@@ -689,8 +693,8 @@ function CompanyTenderCard({
             </Link>
           </div>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 
@@ -749,8 +753,9 @@ function VendorTenderCard({
   };
 
   return (
-    <Card className={`card-3d hover:border-primary/30 border-0 ${isArchived ? "bg-muted/15 border-border/40" : ""}`}>
-      <CardContent className="p-5 space-y-3">
+    <div className={`group relative bg-card border rounded-2xl card-3d card-sheen hover:border-primary/40 overflow-hidden ${isArchived ? "bg-muted/15 border-border/40" : "border-border"}`}>
+      <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-primary/60 via-primary/20 to-transparent" />
+      <div className="p-5 space-y-3">
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1.5 flex-wrap">
@@ -913,7 +918,7 @@ function VendorTenderCard({
             </Link>
           </div>
         )}
-      </CardContent>
+      </div>
       <Dialog open={declineOpen} onOpenChange={(open) => { setDeclineOpen(open); if (!open) { setDeclineError(false); } }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -948,7 +953,7 @@ function VendorTenderCard({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </Card>
+    </div>
   );
 }
 

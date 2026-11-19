@@ -49,12 +49,17 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     groupIds.length ? materialServiceTypes.find({}).toArray() : Promise.resolve([]),
   ]);
   const typeById = new Map(types.map((t) => [t._id!.toString(), t]));
-  const capabilityGroups = groups.map((g) => ({
-    _id: g._id,
-    name: g.name,
-    description: g.description,
-    category: typeById.get(g.typeId.toString())?.category ?? 'material',
-  }));
+  const capabilityGroups = groups.map((g) => {
+    const parentType = typeById.get(g.typeId.toString());
+    return {
+      _id: g._id,
+      name: g.name,
+      description: g.description,
+      typeId: g.typeId,
+      typeName: parentType?.name,
+      category: parentType?.category ?? 'material',
+    };
+  });
   const { userId: _userId, ...safe } = profile;
   return NextResponse.json({ ...safe, publicDocuments: publicDocs, capabilityGroups });
 }

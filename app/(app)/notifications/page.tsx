@@ -5,7 +5,6 @@ import { useSession } from "next-auth/react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
   Bell, Trophy, XCircle, FileText, Package, MessageSquare, Mail, Clock,
@@ -78,7 +77,10 @@ export default function NotificationsPage() {
       <div className="pointer-events-none absolute -top-6 left-0 right-0 h-40 bg-gradient-to-b from-primary/[0.06] to-transparent rounded-3xl" />
 
       <div className="relative flex flex-wrap items-start justify-between gap-3">
-        <div>
+        <div className="space-y-2">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-primary/10 text-primary text-[11px] font-bold uppercase tracking-wider">
+            <Bell size={11} /> Activity Feed
+          </span>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground font-[family-name:var(--font-heading)] text-gradient">
             Notifications
           </h1>
@@ -92,6 +94,7 @@ export default function NotificationsPage() {
             size="sm"
             onClick={() => markAll.mutate()}
             disabled={markAll.isPending}
+            className="rounded-xl"
             id="mark-all-read-btn"
           >
             <CheckCheck className="h-4 w-4" /> Mark all as read
@@ -118,20 +121,21 @@ export default function NotificationsPage() {
 
       {/* List */}
       {visible.length === 0 ? (
-        <Card className="glass card-3d border-0">
-          <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-            <div className="w-14 h-14 rounded-2xl bg-muted/60 flex items-center justify-center mb-4">
-              <Inbox className="h-7 w-7 text-muted-foreground" />
+        <div className="bg-card border border-border rounded-3xl card-3d">
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
+              <Inbox className="h-7 w-7 text-primary" />
             </div>
             <div className="font-semibold text-foreground">No notifications</div>
             <div className="text-sm text-muted-foreground mt-1">
               {tab === "unread" ? "No unread updates right now." : "Updates about tenders, bids and awards will appear here."}
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       ) : (
-        <Card className="overflow-hidden border-0 shadow-[var(--shadow-card)]">
-          <CardContent className="p-0">
+        <div className="relative overflow-hidden bg-card border border-border rounded-2xl card-3d">
+          <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-primary/60 via-primary/20 to-transparent z-10" />
+          <div className="p-0">
             <div className="divide-y divide-border">
               {visible.map((n: any) => {
                 const isAwardWin = n.type === "tender_awarded";
@@ -189,8 +193,8 @@ export default function NotificationsPage() {
                 );
               })}
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -186,7 +186,7 @@ export default function ComparisonStatementPage({ params }: { params: Promise<{ 
       <BidComparisonStatement data={{ ...data, bids: displayBids }} paper={paper} />
 
       {canAward && awardableBids.length > 0 && (
-        <Card className="print:hidden glass card-3d border-0 rounded-2xl">
+        <Card className="print:hidden rounded-2xl card-3d border-border bg-card">
           <CardHeader>
             <CardTitle className="text-base font-[family-name:var(--font-heading)] flex items-center gap-2">
               <Trophy className="h-4 w-4 text-amber-500" /> Award decision
@@ -255,7 +255,7 @@ export default function ComparisonStatementPage({ params }: { params: Promise<{ 
         onConfirm={(payload) => awardMutation.mutate(payload)}
       />
 
-      <Card className="print:hidden glass card-3d border-0 rounded-2xl">
+      <Card className="print:hidden rounded-2xl card-3d border-border bg-card">
         <CardHeader>
           <CardTitle className="text-base font-[family-name:var(--font-heading)]">Add company remarks</CardTitle>
           <p className="text-xs text-muted-foreground">

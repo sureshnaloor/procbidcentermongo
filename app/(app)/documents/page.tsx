@@ -4,9 +4,8 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { FileText, Loader2, ExternalLink, Archive, Calendar, CalendarClock, Clock } from "lucide-react";
+import { FileText, FolderOpen, Loader2, ExternalLink, Archive, Calendar, CalendarClock, Clock } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import { PROCUREMENT_TYPES } from "@/lib/procurement";
 import { DeadlineCountdown } from "@/components/deadline-countdown";
@@ -51,7 +50,10 @@ export default function DocumentsPage() {
 
   return (
     <div className="space-y-8 animate-fade-in-up">
-      <div>
+      <div className="space-y-2">
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-primary/10 text-primary text-[11px] font-bold uppercase tracking-wider">
+          <FolderOpen size={11} /> Central Document Vault
+        </span>
         <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground font-[family-name:var(--font-heading)] text-gradient">
           Documents
         </h1>
@@ -67,7 +69,7 @@ export default function DocumentsPage() {
         {loadingSigned ? (
           <div className="flex items-center justify-center py-10"><Loader2 className="animate-spin h-6 w-6 text-muted-foreground" /></div>
         ) : signedTenders.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-border bg-muted/20 p-6 text-center">
+          <div className="rounded-3xl border border-dashed border-border bg-card card-3d p-8 text-center">
             <p className="text-sm text-muted-foreground font-medium">No signed offers uploaded yet.</p>
           </div>
         ) : (
@@ -121,18 +123,19 @@ export default function DocumentsPage() {
         {isLoading ? (
           <div className="flex items-center justify-center py-16"><Loader2 className="animate-spin h-6 w-6 text-muted-foreground" /></div>
         ) : docs.length === 0 ? (
-          <div className="text-center py-12 rounded-2xl border border-dashed border-border bg-muted/20">
-            <div className="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center mx-auto mb-4">
-              <FileText className="h-7 w-7 text-muted-foreground" />
+          <div className="text-center py-12 rounded-3xl border border-dashed border-border bg-card card-3d">
+            <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
+              <FileText className="h-7 w-7 text-primary" />
             </div>
             <p className="text-muted-foreground font-medium">No profile documents yet</p>
           </div>
         ) : (
-          <Card className="border-0 shadow-[var(--shadow-card)] overflow-hidden">
-            <CardHeader className="bg-muted/30 border-b border-border pb-3">
-              <CardTitle className="text-base font-[family-name:var(--font-heading)]">Uploaded documents</CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
+          <div className="relative bg-card border border-border rounded-2xl card-3d overflow-hidden">
+            <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-primary/60 via-primary/20 to-transparent z-10" />
+            <div className="px-5 py-4 bg-muted/30 border-b border-border">
+              <h3 className="text-base font-bold font-[family-name:var(--font-heading)]">Uploaded documents</h3>
+            </div>
+            <div className="p-0">
               <div className="divide-y divide-border">
                 {(docs as any[]).map((d: any) => (
                   <a key={d._id} href={d.fileUrl} target="_blank" rel="noopener noreferrer"
@@ -150,8 +153,8 @@ export default function DocumentsPage() {
                   </a>
                 ))}
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         )}
       </section>
     </div>
@@ -164,8 +167,9 @@ function SignedTenderCard({ tender, isArchived }: { tender: any; isArchived: boo
   const isPastDue = tender.bidDeadline && new Date(tender.bidDeadline).getTime() < Date.now();
 
   return (
-    <Card className={`border-0 shadow-[var(--shadow-card)] ${isArchived ? "bg-card/70" : ""}`}>
-      <CardContent className="p-4 space-y-3">
+    <div className={`group relative bg-card border rounded-2xl card-3d card-sheen hover:border-primary/40 overflow-hidden ${isArchived ? "bg-card/70 border-border/40" : "border-border"}`}>
+      <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-primary/60 via-primary/20 to-transparent" />
+      <div className="p-4 space-y-3">
         <div className="space-y-1.5">
           <div className="flex flex-wrap items-center gap-2">
             {typeMeta && <Badge variant="outline" className="text-[10px] uppercase font-bold">{typeMeta.label}</Badge>}
@@ -216,7 +220,7 @@ function SignedTenderCard({ tender, isArchived }: { tender: any; isArchived: boo
             </div>
           ))}
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }

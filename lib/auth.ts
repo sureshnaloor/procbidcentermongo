@@ -26,10 +26,16 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         try {
           const { users, profiles } = await collections();
           const user = await users.findOne({ username });
-          if (!user) return null;
+          if (!user) {
+            console.warn(`[auth] Sign-in attempt for unknown username "${username}"`);
+            return null;
+          }
 
           const valid = await bcrypt.compare(password, user.passwordHash);
-          if (!valid) return null;
+          if (!valid) {
+            console.warn(`[auth] Sign-in attempt with wrong password for "${username}"`);
+            return null;
+          }
 
           const profile = await profiles.findOne({ userId: user._id });
           const superadminUsername = process.env.SUPERADMIN_USERNAME ?? '';

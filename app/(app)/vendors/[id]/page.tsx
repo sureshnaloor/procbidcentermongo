@@ -1,14 +1,15 @@
 "use client";
 
-import { use } from "react";
+import { use, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Building2, Globe, MapPin, Phone, FileText, ExternalLink, Loader2, Shield, MessageSquare, ArrowLeft } from "lucide-react";
+import { Building2, Globe, MapPin, Phone, FileText, ExternalLink, Loader2, Shield, MessageSquare, ArrowLeft, Star, Activity } from "lucide-react";
 import { PUBLIC_DOCUMENT_CATEGORIES } from "@/lib/constants";
+import { EngagementDialog } from "@/components/engagement-dialog";
 
 function categoryLabel(value?: string) {
   return PUBLIC_DOCUMENT_CATEGORIES.find((c) => c.value === value)?.label ?? value ?? "Document";
@@ -17,6 +18,10 @@ function categoryLabel(value?: string) {
 export default function VendorPublicPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { data: session } = useSession();
+  const [showEngagement, setShowEngagement] = useState(false);
+  const userType = (session?.user as any)?.userType;
+  const isCompany = userType === "company" || (session?.user as any)?.role === "admin";
+
   const { data: vendor, isLoading } = useQuery({
     queryKey: ["vendor", id],
     queryFn: () => fetch(`/api/profile/${id}`).then((r) => r.json()),
@@ -40,7 +45,7 @@ export default function VendorPublicPage({ params }: { params: Promise<{ id: str
 
   return (
     <div className="max-w-3xl mx-auto space-y-6 animate-fade-in-up">
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
         <div>
           <Link href="/vendors" className="inline-flex items-center gap-1 text-xs font-semibold text-muted-foreground hover:text-foreground mb-2">
             <ArrowLeft className="h-3.5 w-3.5" /> All suppliers
@@ -58,18 +63,42 @@ export default function VendorPublicPage({ params }: { params: Promise<{ id: str
             {[vendor.city, vendor.country].filter(Boolean).join(", ") || "Registered supplier"}
           </p>
         </div>
-        {canMessage && (
-          <Link href={`/messages/dm/${vendor._id}`}>
-            <Button size="sm"><MessageSquare className="h-4 w-4" /> Message</Button>
-          </Link>
-        )}
+
+        <div className="flex items-center gap-2 flex-wrap">
+          {isCompany && (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5 rounded-xl h-9 text-xs"
+                onClick={() => setShowEngagement(true)}
+              >
+                <Activity className="h-3.5 w-3.5 text-primary" /> Bids &amp; Activity
+              </Button>
+              <Link href={`/vendors/${vendor._id}/evaluation`}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5 rounded-xl h-9 text-xs border-amber-500/30 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10"
+                >
+                  <Star className="h-3.5 w-3.5 fill-amber-500 text-amber-500" /> Grading &amp; Eval
+                </Button>
+              </Link>
+            </>
+          )}
+          {canMessage && (
+            <Link href={`/messages/dm/${vendor._id}`}>
+              <Button size="sm" className="rounded-xl h-9"><MessageSquare className="h-4 w-4 mr-1" /> Message</Button>
+            </Link>
+          )}
+        </div>
       </div>
 
       <p className="text-sm text-muted-foreground">
         Review this supplier&apos;s groups and documents before inviting them to an RFQ, RFP, or tender.
       </p>
 
-      <Card className="glass card-3d border-0">
+      <Card className="rounded-2xl card-3d border-border bg-card">
         <CardHeader><CardTitle className="text-sm font-[family-name:var(--font-heading)]">Material &amp; service groups</CardTitle></CardHeader>
         <CardContent className="space-y-4">
           {groups.length === 0 ? (
@@ -81,7 +110,9 @@ export default function VendorPublicPage({ params }: { params: Promise<{ id: str
                   <div className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Materials</div>
                   <div className="flex flex-wrap gap-2">
                     {materialGroups.map((g: any) => (
-                      <Badge key={g._id} variant="outline">{g.name}</Badge>
+                      <Badge key={g._id} variant="outline">
+                        {g.typeName ? `${g.typeName} › ${g.name}` : g.name}
+                      </Badge>
                     ))}
                   </div>
                 </div>
@@ -91,7 +122,9 @@ export default function VendorPublicPage({ params }: { params: Promise<{ id: str
                   <div className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Services</div>
                   <div className="flex flex-wrap gap-2">
                     {serviceGroups.map((g: any) => (
-                      <Badge key={g._id}>{g.name}</Badge>
+                      <Badge key={g._id}>
+                        {g.typeName ? `${g.typeName} › ${g.name}` : g.name}
+                      </Badge>
                     ))}
                   </div>
                 </div>
@@ -101,7 +134,7 @@ export default function VendorPublicPage({ params }: { params: Promise<{ id: str
         </CardContent>
       </Card>
 
-      <Card className="glass card-3d border-0">
+      <Card className="rounded-2xl card-3d border-border bg-card">
         <CardHeader><CardTitle className="text-sm font-[family-name:var(--font-heading)]">Supplier information</CardTitle></CardHeader>
         <CardContent className="space-y-3 text-sm">
           {vendor.description && <p className="text-foreground whitespace-pre-wrap">{vendor.description}</p>}
@@ -122,7 +155,7 @@ export default function VendorPublicPage({ params }: { params: Promise<{ id: str
         </CardContent>
       </Card>
 
-      <Card className="glass card-3d border-0">
+      <Card className="rounded-2xl card-3d border-border bg-card">
         <CardHeader><CardTitle className="text-sm font-[family-name:var(--font-heading)]">Public documents</CardTitle></CardHeader>
         <CardContent>
           {docs.length === 0 ? (
@@ -143,6 +176,14 @@ export default function VendorPublicPage({ params }: { params: Promise<{ id: str
           )}
         </CardContent>
       </Card>
+
+      <EngagementDialog
+        open={showEngagement}
+        onOpenChange={setShowEngagement}
+        vendorId={vendor._id}
+        vendorName={vendor.companyName}
+        isCompanyViewer={true}
+      />
     </div>
   );
 }

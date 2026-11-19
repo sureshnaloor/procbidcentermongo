@@ -488,26 +488,28 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
             <p className="text-sm text-muted-foreground">{PROCUREMENT_TYPES[tender.type as keyof typeof PROCUREMENT_TYPES].summary}</p>
           )}
           {tender.description && (
-            <Card className="glass card-3d border-0"><CardContent className="pt-6"><p className="text-sm text-foreground whitespace-pre-wrap">{tender.description}</p></CardContent></Card>
+            <Card className="rounded-2xl card-3d border-border bg-card"><CardContent className="pt-6"><p className="text-sm text-foreground whitespace-pre-wrap">{tender.description}</p></CardContent></Card>
           )}
           {tender.categories?.length > 0 && (
-            <Card className="glass card-3d border-0">
+            <Card className="rounded-2xl card-3d border-border bg-card">
               <CardHeader><CardTitle className="text-sm font-[family-name:var(--font-heading)]">Material & Service Groups</CardTitle></CardHeader>
               <CardContent className="pt-0 flex flex-wrap gap-2">
                 {tender.categories.map((c: any) => (
-                  <Badge key={c.id} variant="outline">{c.name}</Badge>
+                  <Badge key={c.id} variant="outline">
+                    {c.typeName ? `${c.typeName} › ${c.name}` : c.name}
+                  </Badge>
                 ))}
               </CardContent>
             </Card>
           )}
           {tender.requirements && (
-            <Card className="glass card-3d border-0"><CardHeader><CardTitle className="text-sm font-[family-name:var(--font-heading)]">Requirements</CardTitle></CardHeader><CardContent className="pt-0"><p className="text-sm text-foreground whitespace-pre-wrap">{tender.requirements}</p></CardContent></Card>
+            <Card className="rounded-2xl card-3d border-border bg-card"><CardHeader><CardTitle className="text-sm font-[family-name:var(--font-heading)]">Requirements</CardTitle></CardHeader><CardContent className="pt-0"><p className="text-sm text-foreground whitespace-pre-wrap">{tender.requirements}</p></CardContent></Card>
           )}
         </TabsContent>
 
         {tender.boqItems?.length > 0 && (
           <TabsContent value="boq" className="mt-4">
-            <Card className="glass card-3d border-0">
+            <Card className="rounded-2xl card-3d border-border bg-card">
               <CardHeader className="flex-row items-start justify-between gap-3 space-y-0">
                 <CardTitle className="text-sm font-[family-name:var(--font-heading)]">Bill of Quantities</CardTitle>
                 <Button
@@ -556,7 +558,7 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
         {tender.clauses?.length > 0 && (
           <TabsContent value="terms" className="space-y-4 mt-4">
             {tender.clauses.map((c: any) => (
-              <Card key={c.slug || c.kind}>
+              <Card key={c.slug || c.kind} className="rounded-2xl card-3d border-border bg-card">
                 <CardHeader>
                   <div className="flex items-center gap-2">
                     <CardTitle className="text-sm font-[family-name:var(--font-heading)]">{c.title}</CardTitle>
@@ -591,7 +593,7 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
         {(isOwner || isAdmin) && tender.status !== "draft" && (
           <TabsContent value="suppliers" className="mt-4 space-y-4">
             {!biddingClosed && (
-              <Card className="glass card-3d border-0">
+              <Card className="rounded-2xl card-3d border-border bg-card">
                 <CardHeader><CardTitle className="text-sm font-[family-name:var(--font-heading)]">Invite suppliers</CardTitle></CardHeader>
                 <CardContent className="space-y-2">
                   <p className="text-xs text-muted-foreground">Invited suppliers can prepare offers immediately. Others may request access for your approval.</p>
@@ -706,7 +708,7 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
                 </div>
                 <div className="grid gap-3">
                   {(bids as any[]).map((b: any) => (
-                    <Card key={b._id} className="hover:shadow-md transition-shadow">
+                    <Card key={b._id} className="rounded-2xl card-3d border-border bg-card hover:border-primary/40 transition-all">
                       <CardContent className="p-4 space-y-2">
                         <Link href={`/bids/${b._id}`} className="flex items-center justify-between">
                           <div>
@@ -793,12 +795,15 @@ export default function TenderDetailPage({ params }: { params: Promise<{ id: str
 
 function StatCard({ icon: Icon, label, value }: { icon: React.ElementType; label: string; value: string | number }) {
   return (
-    <div className="rounded-lg border border-border p-3">
-      <div className="flex items-center gap-1.5 mb-1">
-        <Icon className="h-3.5 w-3.5 text-muted-foreground" />
-        <span className="text-xs text-muted-foreground">{label}</span>
+    <div className="group relative rounded-2xl border border-border bg-card p-3.5 card-3d overflow-hidden">
+      <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-primary/60 via-primary/20 to-transparent" />
+      <div className="flex items-center gap-2 mb-1.5">
+        <div className="w-6 h-6 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+          <Icon className="h-3 w-3 text-primary" />
+        </div>
+        <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">{label}</span>
       </div>
-      <div className="font-semibold text-sm text-foreground">{value}</div>
+      <div className="font-bold text-sm text-foreground">{value}</div>
     </div>
   );
 }

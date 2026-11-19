@@ -1,14 +1,15 @@
 "use client";
 
-import { use } from "react";
+import { use, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Building2, Globe, MapPin, Phone, Users, FileText, ExternalLink, Loader2, Shield, MessageSquare } from "lucide-react";
+import { Building2, Globe, MapPin, Phone, Users, FileText, ExternalLink, Loader2, Shield, MessageSquare, Activity, Award } from "lucide-react";
 import { PUBLIC_DOCUMENT_CATEGORIES } from "@/lib/constants";
+import { EngagementDialog } from "@/components/engagement-dialog";
 
 function categoryLabel(value?: string) {
   return PUBLIC_DOCUMENT_CATEGORIES.find((c) => c.value === value)?.label ?? value ?? "Document";
@@ -17,6 +18,8 @@ function categoryLabel(value?: string) {
 export default function CompanyPublicPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { data: session } = useSession();
+  const [showEngagement, setShowEngagement] = useState(false);
+
   const { data: company, isLoading } = useQuery({
     queryKey: ["company", id],
     queryFn: () => fetch(`/api/profile/${id}`).then((r) => r.json()),
@@ -33,10 +36,11 @@ export default function CompanyPublicPage({ params }: { params: Promise<{ id: st
   }
 
   const docs = company.publicDocuments ?? [];
+  const isVendor = me?.userType === "vendor";
 
   return (
     <div className="max-w-3xl mx-auto space-y-6 animate-fade-in-up">
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center">
@@ -49,11 +53,36 @@ export default function CompanyPublicPage({ params }: { params: Promise<{ id: st
           </div>
           <p className="text-sm text-muted-foreground">{company.industry || "EPC Company"}</p>
         </div>
-        {me?.userType === "vendor" && String(me._id) !== String(company._id) && (
-          <Link href={`/messages/dm/${company._id}`}>
-            <Button size="sm"><MessageSquare className="h-4 w-4" /> Message</Button>
-          </Link>
-        )}
+
+        <div className="flex items-center gap-2 flex-wrap">
+          {isVendor && (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5 rounded-xl h-9 text-xs"
+                onClick={() => setShowEngagement(true)}
+              >
+                <Activity className="h-3.5 w-3.5 text-primary" /> My Bids
+              </Button>
+              <Link href={`/companies/${company._id}/bids-eval`}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5 rounded-xl h-9 text-xs border-primary/30 text-primary hover:bg-primary/10"
+                >
+                  <Award className="h-3.5 w-3.5 text-primary" /> Performance &amp; Eval
+                </Button>
+              </Link>
+            </>
+          )}
+
+          {me?.userType === "vendor" && String(me._id) !== String(company._id) && (
+            <Link href={`/messages/dm/${company._id}`}>
+              <Button size="sm" className="rounded-xl h-9"><MessageSquare className="h-4 w-4 mr-1" /> Message</Button>
+            </Link>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 stagger-children">
@@ -72,7 +101,7 @@ export default function CompanyPublicPage({ params }: { params: Promise<{ id: st
         )}
       </div>
 
-      <Card className="glass card-3d border-0">
+      <Card className="rounded-2xl card-3d border-border bg-card">
         <CardHeader><CardTitle className="text-sm font-[family-name:var(--font-heading)]">Company information</CardTitle></CardHeader>
         <CardContent className="space-y-3 text-sm">
           {company.description && <p className="text-foreground whitespace-pre-wrap">{company.description}</p>}
@@ -91,7 +120,7 @@ export default function CompanyPublicPage({ params }: { params: Promise<{ id: st
         </CardContent>
       </Card>
 
-      <Card className="glass card-3d border-0">
+      <Card className="rounded-2xl card-3d border-border bg-card">
         <CardHeader><CardTitle className="text-sm font-[family-name:var(--font-heading)]">Public documents</CardTitle></CardHeader>
         <CardContent>
           {docs.length === 0 ? (
@@ -112,6 +141,14 @@ export default function CompanyPublicPage({ params }: { params: Promise<{ id: st
           )}
         </CardContent>
       </Card>
+
+      <EngagementDialog
+        open={showEngagement}
+        onOpenChange={setShowEngagement}
+        companyId={company._id}
+        companyName={company.companyName}
+        isCompanyViewer={false}
+      />
     </div>
   );
 }

@@ -119,7 +119,10 @@ export default function OfflineBidsPage() {
 
   return (
     <div className="space-y-8 animate-fade-in-up">
-      <div>
+      <div className="space-y-2">
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-primary/10 text-primary text-[11px] font-bold uppercase tracking-wider">
+          <FileSpreadsheet size={11} /> Offline Capture
+        </span>
         <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground font-[family-name:var(--font-heading)] text-gradient">
           Offline Bids
         </h1>
@@ -130,7 +133,7 @@ export default function OfflineBidsPage() {
         </p>
       </div>
 
-      <Card className="border-0 shadow-[var(--shadow-card)] card-3d">
+      <Card className="rounded-2xl card-3d border-border">
         <CardContent className="p-5 space-y-4">
           <div className="flex items-center gap-2">
             <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -191,9 +194,9 @@ export default function OfflineBidsPage() {
             <Loader2 className="animate-spin h-6 w-6 text-muted-foreground" />
           </div>
         ) : (rows as any[]).length === 0 ? (
-          <div className="text-center py-12 rounded-2xl border border-dashed border-border bg-muted/20">
-            <div className="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center mx-auto mb-4">
-              <FileSpreadsheet className="h-7 w-7 text-muted-foreground" />
+          <div className="text-center py-12 rounded-3xl border border-dashed border-border bg-card card-3d">
+            <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
+              <FileSpreadsheet className="h-7 w-7 text-primary" />
             </div>
             <p className="text-muted-foreground font-medium">No offline bids or invites yet</p>
             <p className="text-xs text-muted-foreground mt-1">Invite a supplier and upload their filled workbook above — the package will appear here.</p>
@@ -294,7 +297,7 @@ function OfflinePackageCard({
   const issuedDate = row.tender.createdAt ? format(new Date(row.tender.createdAt), "dd MMM yyyy") : null;
 
   return (
-    <Card className={`border-0 shadow-[var(--shadow-card)] card-3d ${isArchived ? "bg-card/70" : ""}`}>
+    <Card className={`rounded-2xl card-3d border-border ${isArchived ? "bg-card/70" : ""}`}>
       <CardContent className="p-5 space-y-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="space-y-1.5 min-w-0">

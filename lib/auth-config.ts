@@ -4,6 +4,17 @@ import type { NextAuthConfig } from 'next-auth';
 export const authConfig = {
   providers: [], // Empty providers array for Edge-compatibility in middleware
   trustHost: true,
+  logger: {
+    // A wrong username/password is expected user error, not a server fault.
+    // Downgrade it to a one-line warning so real errors stay visible in the logs.
+    error(error) {
+      if ("type" in error && error.type === "CredentialsSignin") {
+        console.warn('[auth] Sign-in rejected: invalid credentials supplied');
+        return;
+      }
+      console.error(error);
+    },
+  },
   callbacks: {
     async jwt({ token, user }) {
       if (user) {

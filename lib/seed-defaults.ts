@@ -1,5 +1,6 @@
 import { collections, ensureIndexes } from './db';
 import {
+  DEFAULT_TAXONOMY,
   DEFAULT_MATERIAL_GROUPS,
   DEFAULT_SERVICE_GROUPS,
   PREDEFINED_CHANNELS,
@@ -8,6 +9,38 @@ import {
 import type { IMaterialServiceType } from './types';
 
 let seeded = false;
+
+export async function getOrCreateTaxonomyType(
+  category: 'material' | 'service',
+  name: string,
+  description?: string
+): Promise<IMaterialServiceType> {
+  const { materialServiceTypes } = await collections();
+  const trimmedName = name.trim();
+  const existing = await materialServiceTypes.findOne({
+    category,
+    name: { $regex: new RegExp(`^${trimmedName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+  });
+  if (existing) return existing;
+
+  try {
+    const result = await materialServiceTypes.insertOne({
+      category,
+      name: trimmedName,
+      description: description?.trim() || `${trimmedName} (${category})`,
+      createdAt: new Date(),
+    });
+    const created = await materialServiceTypes.findOne({ _id: result.insertedId });
+    if (created) return created;
+  } catch {
+    const raced = await materialServiceTypes.findOne({
+      category,
+      name: { $regex: new RegExp(`^${trimmedName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+    });
+    if (raced) return raced;
+  }
+  throw new Error(`Unable to create ${category} type: ${name}`);
+}
 
 async function getOrCreateCategoryType(category: 'material' | 'service'): Promise<IMaterialServiceType> {
   const { materialServiceTypes } = await collections();
@@ -33,7 +66,7 @@ async function getOrCreateCategoryType(category: 'material' | 'service'): Promis
 
 async function seedGroups(
   type: IMaterialServiceType,
-  groups: readonly { name: string; description: string }[]
+  groups: readonly { name: string; description?: string }[]
 ) {
   const { materialServiceGroups } = await collections();
   for (const group of groups) {
@@ -106,6 +139,12 @@ export async function ensureDefaults() {
   if (seeded) return;
   try {
     await ensureIndexes();
+    // Seed multi-discipline root types and groups
+    for (const tax of DEFAULT_TAXONOMY) {
+      const taxType = await getOrCreateTaxonomyType(tax.category, tax.name, tax.description);
+      await seedGroups(taxType, tax.groups);
+    }
+    // Backward compatibility for legacy default groups
     const materialType = await getOrCreateCategoryType('material');
     const serviceType = await getOrCreateCategoryType('service');
     await seedGroups(materialType, DEFAULT_MATERIAL_GROUPS);

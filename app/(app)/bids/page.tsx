@@ -4,7 +4,6 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { FileText, Loader2, DollarSign, Clock, Building2, CalendarClock, User, Scale, Archive, Calendar, Trophy } from "lucide-react";
@@ -197,7 +196,10 @@ export default function BidsPage() {
   return (
     <div className="space-y-6 animate-fade-in-up">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
+        <div className="space-y-2">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-primary/10 text-primary text-[11px] font-bold uppercase tracking-wider">
+            <Scale size={11} /> {isVendor ? "My Offers" : "Central Bid Registry"}
+          </span>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground font-[family-name:var(--font-heading)] text-gradient">
             {isAdmin ? "All Bids by Tender" : isCompany ? "Bids Received" : "My Bids"}
           </h1>
@@ -215,9 +217,9 @@ export default function BidsPage() {
         <div className="flex items-center justify-center py-16"><Loader2 className="animate-spin h-6 w-6 text-muted-foreground" /></div>
       ) : isArranged ? (
         packages.length === 0 ? (
-          <div className="text-center py-16 rounded-2xl border border-dashed border-border bg-muted/20">
-            <div className="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center mx-auto mb-4">
-              <FileText className="h-7 w-7 text-muted-foreground" />
+          <div className="text-center py-16 rounded-3xl border border-dashed border-border bg-card card-3d">
+            <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
+              <FileText className="h-7 w-7 text-primary" />
             </div>
             <p className="text-muted-foreground font-medium">
               No packages or bids available yet.
@@ -301,9 +303,9 @@ export default function BidsPage() {
           </div>
         )
       ) : (bids as any[]).length === 0 ? (
-        <div className="text-center py-16 rounded-2xl border border-dashed border-border bg-muted/20">
-          <div className="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center mx-auto mb-4">
-            <FileText className="h-7 w-7 text-muted-foreground" />
+        <div className="text-center py-16 rounded-3xl border border-dashed border-border bg-card card-3d">
+          <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
+            <FileText className="h-7 w-7 text-primary" />
           </div>
           <p className="text-muted-foreground font-medium">
             {isVendor
@@ -394,8 +396,9 @@ function TenderPackageCard({ tender, bids, isArchived }: { tender: any; bids: an
   const issuedDate = tender.createdAt ? format(new Date(tender.createdAt), "dd MMM yyyy") : null;
 
   return (
-    <Card className={`overflow-hidden border-0 shadow-[var(--shadow-card)] ${isArchived ? "bg-card/70" : ""}`}>
-      <CardHeader className="pb-3 border-b border-border bg-muted/30">
+    <div className={`relative overflow-hidden bg-card border border-border rounded-2xl card-3d ${isArchived ? "bg-card/70" : ""}`}>
+      <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-primary/60 via-primary/20 to-transparent z-10" />
+      <div className="px-6 py-4 border-b border-border bg-muted/30">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2 mb-1.5">
@@ -416,9 +419,9 @@ function TenderPackageCard({ tender, bids, isArchived }: { tender: any; bids: an
                 · {bids.length} {bids.length === 1 ? "offer" : "offers"}
               </span>
             </div>
-            <CardTitle className="text-base font-[family-name:var(--font-heading)]">
+            <h3 className="text-base font-bold font-[family-name:var(--font-heading)]">
               <Link href={`/tenders/${tender._id}`} className="hover:text-primary transition-colors">{tender.title}</Link>
-            </CardTitle>
+            </h3>
             {tender.bidDeadline && (
               <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground mt-1">
                 <span className="flex items-center gap-1">
@@ -439,19 +442,19 @@ function TenderPackageCard({ tender, bids, isArchived }: { tender: any; bids: an
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <Link href={`/comparisons/${tender._id}`}>
-              <Button size="sm" variant="outline" id={`statement-${tender._id}`}>Statement</Button>
+              <Button size="sm" variant="outline" className="rounded-xl" id={`statement-${tender._id}`}>Statement</Button>
             </Link>
             {bids.length > 1 && (
               <Link href={`/bids/comparison/${tender._id}`}>
-                <Button size="sm" variant="outline" id={`compare-${tender._id}`}>
+                <Button size="sm" variant="outline" className="rounded-xl border-primary/30 text-primary hover:bg-primary/5" id={`compare-${tender._id}`}>
                   <Scale className="h-3.5 w-3.5 mr-1" />Compare
                 </Button>
               </Link>
             )}
           </div>
         </div>
-      </CardHeader>
-      <CardContent className="p-4 space-y-3">
+      </div>
+      <div className="p-4 space-y-3">
         {bids.length === 0 ? (
           <p className="text-sm text-muted-foreground py-4 text-center">No offers received on this package yet.</p>
         ) : (
@@ -459,8 +462,8 @@ function TenderPackageCard({ tender, bids, isArchived }: { tender: any; bids: an
             <CompanyBidCard key={b._id} bid={b} />
           ))
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 
@@ -471,8 +474,9 @@ function VendorBidListItem({ bid, isArchived }: { bid: any; isArchived: boolean 
 
   return (
     <Link href={`/bids/${bid._id}`}>
-      <Card className={`card-3d hover:border-primary/30 cursor-pointer border-0 ${isArchived ? "bg-card/70" : ""}`}>
-        <CardContent className="p-5">
+      <div className={`relative bg-card border rounded-2xl card-3d card-sheen hover:border-primary/40 cursor-pointer overflow-hidden ${isArchived ? "bg-card/70 border-border/40" : "border-border"}`}>
+        <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-primary/60 via-primary/20 to-transparent" />
+        <div className="p-5">
           <div className="flex items-start justify-between gap-3">
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1.5 flex-wrap">
@@ -527,8 +531,8 @@ function VendorBidListItem({ bid, isArchived }: { bid: any; isArchived: boolean 
               <Badge variant="destructive" className="text-[10px] py-0 px-1.5">Deadline passed</Badge>
             )}
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </Link>
   );
 }
@@ -538,7 +542,7 @@ function CompanyBidCard({ bid }: { bid: any }) {
   const location = [bid.vendor?.city, bid.vendor?.country].filter(Boolean).join(", ");
   return (
     <Link href={`/bids/${bid._id}`} className="block">
-      <div className="rounded-xl border border-border bg-card hover:shadow-md hover:border-primary/30 transition-all p-4">
+      <div className="rounded-xl border border-border bg-background hover:shadow-md hover:border-primary/40 hover:-translate-y-0.5 transition-all p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2 mb-1.5">

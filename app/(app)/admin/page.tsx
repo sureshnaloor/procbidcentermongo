@@ -53,14 +53,17 @@ export default function AdminPage() {
   return (
     <div className="space-y-6 animate-fade-in-up">
       <div className="flex items-center justify-between">
-        <div>
+        <div className="space-y-2">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-primary/10 text-primary text-[11px] font-bold uppercase tracking-wider">
+            <Shield size={11} /> Governance &amp; Access
+          </span>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground font-[family-name:var(--font-heading)] text-gradient">
             Admin Panel
           </h1>
           {adminInfo?.isSuperAdmin && <p className="text-sm font-semibold text-primary mt-0.5">Super Admin</p>}
         </div>
         <div className="flex gap-2">
-          <Link href="/admin/masters"><Button variant="outline" size="sm" id="master-data-btn"><Settings className="h-4 w-4" />Global Masters</Button></Link>
+          <Link href="/admin/masters"><Button variant="outline" size="sm" className="rounded-xl" id="master-data-btn"><Settings className="h-4 w-4" />Global Masters</Button></Link>
         </div>
       </div>
 
@@ -76,7 +79,7 @@ export default function AdminPage() {
           ) : (
             <div className="grid gap-3 stagger-children">
               {(users as any[]).map((u: any) => (
-                <Card key={u._id} className="border-0 shadow-[var(--shadow-card)] hover:border-primary/30 transition-all">
+                <Card key={u._id} className="rounded-2xl card-3d border-border hover:border-primary/40 transition-all">
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-3">
@@ -136,7 +139,7 @@ export default function AdminPage() {
           <TabsContent value="admins" className="mt-4">
             <div className="grid gap-3 stagger-children">
               {(admins as any[]).map((a: any) => (
-                <Card key={a.id} className="border-0 shadow-[var(--shadow-card)] hover:border-primary/30 transition-all">
+                <Card key={a.id} className="rounded-2xl card-3d border-border hover:border-primary/40 transition-all">
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">

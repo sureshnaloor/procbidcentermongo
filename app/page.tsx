@@ -8,15 +8,12 @@ import { useQuery } from "@tanstack/react-query";
 import {
   Search,
   Calendar,
-  Tag,
   ChevronRight,
   FileText,
   Package,
   Zap,
   ArrowRight,
-  Brain,
   Building2,
-  Coins,
   FileSpreadsheet,
   Layers,
   ShieldCheck,
@@ -24,7 +21,6 @@ import {
   Truck,
   Clock,
   DollarSign,
-  FileCheck,
   LineChart,
   SearchCheck,
   Users,
@@ -50,17 +46,51 @@ import {
   MessageSquare,
   Bell,
   Scale,
-  ArrowUpRight,
   Shield,
   Check,
   LayoutDashboard,
   LogOut,
-  Sliders,
   ExternalLink,
-  ChevronDown,
+  // ── new showcase icons ──
+  ScanLine,
+  GitCompare,
+  GitCompareArrows,
+  RotateCcwClock,
+  Fingerprint,
+  HeartPulse,
+  Gauge,
+  Workflow,
+  ClipboardCheck,
+  ScrollText,
+  Stamp,
+  BadgeDollarSign,
+  Warehouse,
+  ThumbsUp,
+  ArrowLeftRight,
+  CalendarClock,
+  Percent,
+  CreditCard,
+  Timer,
+  Ruler,
+  CircleAlert,
+  UserCheck,
+  Radar,
+  Upload,
+  Eye,
+  Award,
+  Activity,
+  Cpu,
+  Table2,
+  Target,
+  Database,
+  Lock,
+  TableProperties,
+  FileWarning,
+  Network,
+  Gavel,
+  PenLine,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ThemeToggle } from "@/components/theme-toggle";
 
@@ -188,11 +218,13 @@ function SectionHeader({
   title,
   description,
   align = "center",
+  dark = false,
 }: {
   eyebrow: string;
   title: string;
   description?: string;
   align?: "center" | "left";
+  dark?: boolean;
 }) {
   return (
     <Reveal className={align === "center" ? "text-center max-w-3xl mx-auto mb-16" : "mb-10"}>
@@ -200,10 +232,18 @@ function SectionHeader({
         <Sparkles size={13} />
         {eyebrow}
       </span>
-      <h2 className="text-3xl md:text-5xl font-extrabold text-foreground tracking-tight mb-4 leading-tight">
+      <h2
+        className={`text-3xl md:text-5xl font-extrabold tracking-tight mb-4 leading-tight ${
+          dark ? "text-white" : "text-foreground"
+        }`}
+      >
         {title}
       </h2>
-      {description && <p className="text-base md:text-lg text-muted-foreground leading-relaxed">{description}</p>}
+      {description && (
+        <p className={`text-base md:text-lg leading-relaxed ${dark ? "text-white/70" : "text-muted-foreground"}`}>
+          {description}
+        </p>
+      )}
     </Reveal>
   );
 }
@@ -452,14 +492,18 @@ function LoggedInHome({ onTogglePublicView }: { onTogglePublicView: () => void }
   const quickModules = [
     {
       title: "Tenders & Packages",
-      description: isCompany ? "Draft, publish, and manage your procurement scopes" : "Explore live packages, BOQs, drawings, and deadlines",
+      description: isCompany
+        ? "Draft scopes, import BOQs from PDF or Excel, and publish RFQs with a health score"
+        : "Explore live packages, BOQs, drawings, and submission deadlines",
       icon: FileText,
       href: "/tenders",
       badge: isCompany ? `${userTendersData?.total ?? 0} packages` : `${tendersData?.total ?? 0} live`,
     },
     {
       title: "Bid Proposals",
-      description: isCompany ? "Review submitted technical & commercial proposals" : "Prepare proposals, attach certificates, and track status",
+      description: isCompany
+        ? "Every offer centrally recorded, time-stamped, and ready for structured review"
+        : "Prepare structured proposals, attach certificates, and track evaluation status",
       icon: Package,
       href: "/bids",
       badge: `${bids.length} active`,
@@ -467,11 +511,12 @@ function LoggedInHome({ onTogglePublicView }: { onTogglePublicView: () => void }
     ...(isCompany
       ? [
           {
-            title: "Bid Comparison Statements",
-            description: "Automated side-by-side technical & commercial evaluation matrices",
+            title: "Bid Leveling & Comparisons",
+            description:
+              "Apple-to-apple comparison statements — deviations, units, currency, taxes, freight, and terms normalized",
             icon: Scale,
             href: "/comparisons",
-            badge: "Intelligent Matrix",
+            badge: "Leveling Engine",
           },
         ]
       : [
@@ -499,12 +544,47 @@ function LoggedInHome({ onTogglePublicView }: { onTogglePublicView: () => void }
     },
     {
       title: isCompany ? "Qualified Suppliers" : "EPC Companies Directory",
-      description: isCompany ? "Find verified suppliers across power, infrastructure, and oil & gas" : "Explore registered project owners and procurement directors",
+      description: isCompany
+        ? "Suppliers auto-classified into relevant groups — matching suggested, invites approved by you"
+        : "Explore registered project owners and procurement directors",
       icon: isCompany ? Users : Building2,
       href: isCompany ? "/vendors" : "/companies",
       badge: "Verified Network",
     },
   ];
+
+  // Workflow strip — visual orientation of where each module fits
+  const workflowSteps = isCompany
+    ? [
+        { label: "Import BOQ", icon: Upload },
+        { label: "Publish RFQ", icon: FileText },
+        { label: "Invite Suppliers", icon: UserCheck },
+        { label: "Receive Bids", icon: Package },
+        { label: "Level & Compare", icon: Scale },
+        { label: "Award & PO", icon: Gavel },
+      ]
+    : isVendor
+    ? [
+        { label: "Get Matched", icon: Radar },
+        { label: "Accept Invite", icon: CheckCircle2 },
+        { label: "Prepare Offer", icon: PenLine },
+        { label: "Submit Bid", icon: Upload },
+        { label: "Clarifications", icon: MessageSquare },
+        { label: "Win Award", icon: Trophy },
+      ]
+    : [
+        { label: "Tenders", icon: FileText },
+        { label: "Bids", icon: Package },
+        { label: "Comparisons", icon: Scale },
+        { label: "Suppliers", icon: Users },
+      ];
+
+  const todayLabel = new Date().toLocaleDateString(undefined, {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
@@ -600,6 +680,9 @@ function LoggedInHome({ onTogglePublicView }: { onTogglePublicView: () => void }
                     <CheckCircle2 size={12} /> Verified Member
                   </span>
                 )}
+                <span className="px-2.5 py-0.5 rounded-full bg-muted text-muted-foreground text-xs font-semibold flex items-center gap-1.5 border border-border">
+                  <Calendar size={12} className="text-primary" /> {todayLabel}
+                </span>
               </div>
 
               <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-foreground font-[family-name:var(--font-heading)]">
@@ -609,9 +692,9 @@ function LoggedInHome({ onTogglePublicView }: { onTogglePublicView: () => void }
 
               <p className="text-base text-muted-foreground max-w-2xl leading-relaxed">
                 {isCompany
-                  ? "Welcome to your EPC procurement headquarters. Publish tenders, evaluate proposals, and run automated bid comparisons."
+                  ? "Your procurement command center — publish RFQs, level every bid apple-to-apple, and award with a complete compliance trail."
                   : isVendor
-                  ? "Welcome to your supplier opportunity radar. Discover active tenders across power, infrastructure, and oil & gas."
+                  ? "Your opportunity radar — get auto-matched to relevant packages, submit structured offers, and track every evaluation."
                   : "Welcome to the ProSource Super Admin command portal. Manage system masters, compliance, and user directories."}
               </p>
             </div>
@@ -640,7 +723,7 @@ function LoggedInHome({ onTogglePublicView }: { onTogglePublicView: () => void }
                   variant="outline"
                   className="rounded-xl px-4 py-2.5 text-sm font-semibold border-border hover:border-primary/40 flex items-center gap-2"
                 >
-                  <Scale size={16} className="text-primary" /> Bid Comparisons
+                  <Scale size={16} className="text-primary" /> Bid Leveling
                 </Button>
               )}
               {isVendor && (
@@ -663,21 +746,22 @@ function LoggedInHome({ onTogglePublicView }: { onTogglePublicView: () => void }
           </div>
 
           {/* ─── Live KPI Cards Radar ─── */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-10">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-10 stagger-children">
             {kpis.map((kpi, i) => (
               <Link key={i} href={kpi.href}>
                 <div
-                  className={`bg-card border rounded-2xl p-5 card-3d card-sheen transition-all duration-300 ${
+                  className={`group bg-card border rounded-2xl p-5 card-3d card-sheen transition-all duration-300 relative overflow-hidden ${
                     (kpi as any).isSpecial
                       ? "badge-celebrate border-amber-500/40"
                       : "border-border hover:border-primary/40"
                   }`}
                 >
+                  <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-primary/60 via-primary/20 to-transparent" />
                   <div className="flex items-center justify-between mb-3">
-                    <div className={`w-10 h-10 rounded-xl ${kpi.bg} flex items-center justify-center ${kpi.color}`}>
+                    <div className={`w-10 h-10 rounded-xl ${kpi.bg} flex items-center justify-center ${kpi.color} group-hover:scale-110 transition-transform duration-300`}>
                       <kpi.icon size={20} />
                     </div>
-                    <ChevronRight size={16} className="text-muted-foreground/50 group-hover:text-primary transition-colors" />
+                    <ChevronRight size={16} className="text-muted-foreground/50 group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
                   </div>
                   <div className="text-2xl sm:text-3xl font-extrabold text-foreground font-[family-name:var(--font-heading)]">
                     {kpi.value}
@@ -686,6 +770,26 @@ function LoggedInHome({ onTogglePublicView }: { onTogglePublicView: () => void }
                 </div>
               </Link>
             ))}
+          </div>
+
+          {/* ─── Procurement Workflow Strip ─── */}
+          <div className="mt-8 bg-card/70 backdrop-blur-sm border border-border rounded-2xl px-5 py-4 overflow-x-auto">
+            <div className="flex items-center gap-1 min-w-max">
+              <span className="text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground mr-3 flex items-center gap-1.5 shrink-0">
+                <Workflow size={13} className="text-primary" /> Your pipeline
+              </span>
+              {workflowSteps.map((step, i) => (
+                <React.Fragment key={i}>
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-background border border-border text-xs font-semibold text-foreground whitespace-nowrap hover:border-primary/40 hover:text-primary transition-colors">
+                    <step.icon size={13} className="text-primary" />
+                    {step.label}
+                  </span>
+                  {i < workflowSteps.length - 1 && (
+                    <ChevronRight size={13} className="text-muted-foreground/50 shrink-0" />
+                  )}
+                </React.Fragment>
+              ))}
+            </div>
           </div>
         </div>
       </section>
@@ -726,12 +830,12 @@ function LoggedInHome({ onTogglePublicView }: { onTogglePublicView: () => void }
                 Procurement Platform Modules
               </h2>
               <p className="text-sm text-muted-foreground mt-0.5">
-                Fast access to specialized procurement workflows and management hubs
+                Centralized recording, leveling, and compliance — built into every workflow
               </p>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 stagger-children">
             {quickModules.map((mod, i) => (
               <Link key={i} href={mod.href}>
                 <div className="group bg-card border border-border rounded-2xl p-6 card-3d card-sheen hover:border-primary/40 h-full flex flex-col justify-between">
@@ -856,6 +960,7 @@ function LoggedInHome({ onTogglePublicView }: { onTogglePublicView: () => void }
 }
 
 // ═════════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════
 // 🌟 2. LOGGED-OUT PUBLIC MARKETING SHOWCASE LANDING PAGE
 // ═════════════════════════════════════════════════════════════════
 function LoggedOutHome({
@@ -869,7 +974,6 @@ function LoggedOutHome({
   const [searchQuery, setSearchQuery] = useState("");
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
-  const [activeSectorTab, setActiveSectorTab] = useState(0);
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 60);
@@ -882,47 +986,65 @@ function LoggedOutHome({
     queryFn: () => fetch("/api/tenders?status=published&limit=6").then((r) => r.json()),
   });
 
-  const features = [
+  // ── Content model ──
+  const centralPillars = [
     {
-      icon: Brain,
-      title: "AI-Powered Classification",
-      description: "Auto-categorize materials, equipment, and services across every EPC sector with precision metadata.",
+      icon: Database,
+      title: "Centrally Recorded",
+      description:
+        "Every offer, revision, clarification, and addendum lands in one immutable bid registry — no more scattered inboxes and spreadsheet versions.",
     },
     {
-      icon: FileSpreadsheet,
-      title: "Automated Tendering",
-      description: "Publish standardized tender packages, RFPs, RFQs, and multi-currency commercial templates.",
+      icon: Eye,
+      title: "Reviewed & Levelled",
+      description:
+        "Structured technical and commercial review workflows with automated leveling, so evaluators look at decisions — not data entry.",
     },
     {
-      icon: Layers,
-      title: "Smart Vendor Matchmaking",
-      description: "Connect procurement scopes directly with pre-qualified contractors filtered by capability and track record.",
+      icon: GitCompareArrows,
+      title: "Apple-to-Apple",
+      description:
+        "Deviations, units, currencies, taxes, freight, and terms are normalized before comparison. You compare real evaluated cost — never headline price.",
     },
     {
-      icon: SlidersHorizontal,
-      title: "Side-by-Side Bid Matrix",
-      description: "Generate instant technical and commercial comparison sheets for transparent, audited awards.",
+      icon: Lock,
+      title: "Complete Compliance",
+      description:
+        "Approval boards, segregation of duties, and a tamper-evident audit trail on every action keep procurement governance airtight.",
     },
-    {
-      icon: Coins,
-      title: "Cost & Budget Optimization",
-      description: "Drive competitive pricing dynamics while maintaining complete audit trails across projects.",
-    },
-    {
-      icon: ShieldCheck,
-      title: "Prequalification & Verification",
-      description: "Verify licenses, ISO credentials, safety records, and financial standing prior to bid invitation.",
-    },
-    {
-      icon: Truck,
-      title: "Centralized Document Control",
-      description: "Secure storage for engineering drawings, specifications, technical addendums, and compliance logs.",
-    },
-    {
-      icon: Building2,
-      title: "Cross-Sector EPC Governance",
-      description: "Single unified procurement architecture built for power generation, petrochemicals, civil, and oil & gas.",
-    },
+  ];
+
+  const boqPoints = [
+    { icon: FileText, label: "PDF BOQs", text: "Upload scanned or digital PDF bills of quantities — line items, units, and quantities extracted into structured rows." },
+    { icon: FileSpreadsheet, label: "Excel BOQs", text: "Drop in existing pricing templates and workbooks; columns are mapped to a standardized BOQ schema automatically." },
+    { icon: ScanLine, label: "From Drawings — Coming Soon", text: "Auto-extraction of quantities directly from engineering drawings and isometrics is on the near-term roadmap." },
+  ];
+
+  const levelingChecks = [
+    { icon: CircleAlert, title: "Missed / Not-Quoted Items", description: "Line items a bidder skipped are clearly identified and priced into the evaluation — no hidden gaps." },
+    { icon: FileWarning, title: "Specification Deviations", description: "Every departure from the specified grade, standard, or brand is pointed out for technical adjudication." },
+    { icon: Ruler, title: "Unit Differences", description: "Quotes in mismatched units (m vs ft, kg vs ton, lot vs each) are converted to the bid's base unit." },
+    { icon: ArrowLeftRight, title: "Currency Normalization", description: "Offers quoted in a different currency than the bid are converted at a declared FX basis for true comparison." },
+    { icon: Percent, title: "Taxes & Duties", description: "VAT, customs, and withholding treatments are equalized so tax-inclusive and exclusive offers compare fairly." },
+    { icon: Truck, title: "Freight & Logistics", description: "Ex-works, FOB, and DDP offers are levelled to a common delivery point with logistics cost loaded in." },
+    { icon: CreditCard, title: "Payment Terms", description: "Advance, milestone, and retention terms are translated into financing impact on the evaluated price." },
+    { icon: CalendarClock, title: "Delivery Lead Times", description: "Schedule differences are surfaced alongside price so the fastest compliant option is always visible." },
+  ];
+
+  const pipelineSteps = [
+    { icon: ClipboardCheck, title: "Technical Evaluation", description: "Compliance matrices and deviation logs per bidder, adjudicated item by item." },
+    { icon: TableProperties, title: "Commercial Evaluation / CS", description: "Auto-generated comparison statements across every BOQ line, total, and term." },
+    { icon: SlidersHorizontal, title: "Normalization", description: "Leveling adjustments for units, currency, taxes, freight, and terms land at a true evaluated price." },
+    { icon: GitCompare, title: "Award Scenarios", description: "Model single-award vs split-package outcomes and what-if savings before committing." },
+    { icon: Stamp, title: "Approval Board", description: "Recommendations routed through configurable sign-off chains with full audit capture." },
+    { icon: ScrollText, title: "PO & Contract Drafting", description: "Winning bid data pre-populates purchase orders and contract drafts — ready to issue." },
+  ];
+
+  const scorecardSignals = [
+    { icon: RotateCcwClock, title: "Previous Supplies", description: "Complete supply history with quantities, values, and delivery performance on past POs." },
+    { icon: ThumbsUp, title: "Client Approvals", description: "Approval lists and registrations with major EPC clients and operators." },
+    { icon: BadgeDollarSign, title: "Lowest Historical Pricing", description: "Benchmarks against the supplier's own historical lows for the same item family." },
+    { icon: Warehouse, title: "Local Stock", description: "Stockholding and local availability signals for schedule-critical packages." },
   ];
 
   const sectors = [
@@ -960,6 +1082,49 @@ function LoggedOutHome({
     },
   ];
 
+  const features = [
+    {
+      icon: Database,
+      title: "Central Bid Registry",
+      description: "Every offer recorded, time-stamped, and versioned — a single source of truth for all commercial events.",
+    },
+    {
+      icon: FileSpreadsheet,
+      title: "BOQ Import from PDF & Excel",
+      description: "Structured BOQs in minutes, with drawing-based quantity extraction coming soon.",
+    },
+    {
+      icon: Network,
+      title: "Supplier Classification & Auto-Match",
+      description: "Suppliers grouped by material and service classes; scopes auto-matched to the right vendors.",
+    },
+    {
+      icon: Scale,
+      title: "Bid Leveling Engine",
+      description: "Missed items, deviations, units, currency, taxes, freight, and terms normalized apple-to-apple.",
+    },
+    {
+      icon: TableProperties,
+      title: "Comparison Statements",
+      description: "Technical and commercial CS generated automatically for transparent, defensible awards.",
+    },
+    {
+      icon: Stamp,
+      title: "Approval Board & Awards",
+      description: "Configurable approval chains, award scenarios, and PO/contract drafting support.",
+    },
+    {
+      icon: Fingerprint,
+      title: "Supplier Behaviour Analytics",
+      description: "Response, revision, and delivery fingerprints captured on every interaction.",
+    },
+    {
+      icon: ShieldCheck,
+      title: "Prequalification & Verification",
+      description: "Verify licenses, ISO credentials, safety records, and financial standing prior to bid invitation.",
+    },
+  ];
+
   const marqueeItems = [
     { icon: Zap, label: "Power & Energy" },
     { icon: Landmark, label: "Infrastructure & Civil" },
@@ -978,53 +1143,53 @@ function LoggedOutHome({
   const steps = [
     {
       number: "01",
-      title: "Publish Procurement Scope",
-      description: "EPC project owners release packages with technical BOQs, engineering drawings, and submission milestones.",
+      title: "Publish RFQ with Health Score",
+      description: "Owners import BOQs from PDF or Excel, attach drawings and specs, and get an RFQ health score before going live.",
       forUser: "EPC Owner",
     },
     {
       number: "02",
-      title: "AI Auto-Classification",
-      description: "ProSource automatically categorizes line items into standardized EPC material groups and service codes.",
+      title: "Auto-Match Suppliers",
+      description: "The platform classifies suppliers into relevant groups and suggests the strongest invite list — invites go out only after your approval.",
       forUser: "ProSource System",
     },
     {
       number: "03",
-      title: "Targeted Supplier Alerts",
-      description: "Pre-qualified suppliers matching specific capabilities, certifications, and regions receive instant notifications.",
+      title: "Submit Structured Proposals",
+      description: "Invited suppliers submit itemized pricing, technical compliance sheets, and qualification attachments against the same BOQ.",
       forUser: "Qualified Suppliers",
     },
     {
       number: "04",
-      title: "Submit Structured Proposals",
-      description: "Suppliers submit itemized pricing, technical compliance sheets, and necessary qualification attachments.",
-      forUser: "Qualified Suppliers",
-    },
-    {
-      number: "05",
-      title: "Automated Evaluation Matrix",
-      description: "The platform generates side-by-side technical and commercial comparison sheets with deviations highlighted.",
+      title: "Central Recording & Leveling",
+      description: "Every bid is centrally recorded and levelled — missed items, deviations, units, currency, taxes, freight, and terms normalized.",
       forUser: "ProSource System",
     },
     {
+      number: "05",
+      title: "Evaluate & Model Awards",
+      description: "Technical evaluation, commercial CS, normalization, and award scenarios give the board a defensible recommendation.",
+      forUser: "EPC Owner",
+    },
+    {
       number: "06",
-      title: "Contract Award & Audit Log",
-      description: "Transparent award finalization, supplier notifications, contract signing, and complete audit archive.",
+      title: "Approve, Award & Draft PO",
+      description: "Approval board sign-off, transparent award notifications, and PO/contract drafting support close the loop with a full audit trail.",
       forUser: "EPC Owner",
     },
   ];
 
   const ownerBenefits = [
-    { icon: Clock, title: "60% Faster Procurement Cycle", description: "Eliminate spreadsheet friction and manual email follow-ups with automated tendering." },
+    { icon: Clock, title: "60% Faster Procurement Cycle", description: "Eliminate spreadsheet friction and manual email follow-ups with automated tendering and leveling." },
     { icon: SearchCheck, title: "Vetted Contractor Network", description: "Instant access to verified EPC vendors across GCC, Middle East, and global markets." },
-    { icon: FileCheck, title: "Automated Comparison Matrices", description: "Instantly compare commercial line items and technical compliance sheets side-by-side." },
+    { icon: GitCompareArrows, title: "True Apple-to-Apple Awards", description: "Levelled evaluated pricing means the best compliant offer wins — provable in any audit." },
     { icon: DollarSign, title: "15-20% Average Cost Savings", description: "Drive competitive market pricing through transparent and structured bidding rounds." },
   ];
 
   const vendorBenefits = [
     { icon: Users, title: "Direct EPC Owner Access", description: "Connect with Tier-1 EPC contractors and project developers actively sourcing your packages." },
     { icon: LineChart, title: "Live Tender Market Radar", description: "Gain visibility into high-value procurement opportunities before formal market closing." },
-    { icon: ShieldCheck, title: "Zero Lead-Acquisition Cost", description: "Standardized digital submissions reduce bidding overhead and proposal preparation time." },
+    { icon: ShieldCheck, title: "Fair, Level Playing Field", description: "Structured submissions mean your compliant offer is compared on merit — never lost in formatting." },
     { icon: CheckCircle2, title: "Prompt Award Status", description: "Real-time visibility into bid evaluation stages, clarification threads, and contract decisions." },
   ];
 
@@ -1055,11 +1220,12 @@ function LoggedOutHome({
             </span>
           </Link>
 
-          <nav className="hidden md:flex items-center gap-8">
-            <a href="#features" className={navLinkClass}>Features</a>
-            <a href="#sectors" className={navLinkClass}>Sectors</a>
+          <nav className="hidden md:flex items-center gap-7">
+            <a href="#why-central" className={navLinkClass}>Why ProSource</a>
+            <a href="#boq" className={navLinkClass}>BOQ</a>
+            <a href="#leveling" className={navLinkClass}>Bid Leveling</a>
+            <a href="#suppliers" className={navLinkClass}>Suppliers</a>
             <a href="#how-it-works" className={navLinkClass}>Process</a>
-            <a href="#benefits" className={navLinkClass}>Benefits</a>
             <Link href="/tenders" className={navLinkClass}>Live Packages</Link>
           </nav>
 
@@ -1107,17 +1273,20 @@ function LoggedOutHome({
         {isMenuOpen && (
           <div className="md:hidden glass border-t border-border px-6 py-6 shadow-2xl">
             <nav className="flex flex-col gap-4">
-              <a href="#features" className="text-sm font-bold text-foreground" onClick={() => setIsMenuOpen(false)}>
-                Features
+              <a href="#why-central" className="text-sm font-bold text-foreground" onClick={() => setIsMenuOpen(false)}>
+                Why ProSource
               </a>
-              <a href="#sectors" className="text-sm font-bold text-foreground" onClick={() => setIsMenuOpen(false)}>
-                Sectors
+              <a href="#boq" className="text-sm font-bold text-foreground" onClick={() => setIsMenuOpen(false)}>
+                BOQ Import
+              </a>
+              <a href="#leveling" className="text-sm font-bold text-foreground" onClick={() => setIsMenuOpen(false)}>
+                Bid Leveling
+              </a>
+              <a href="#suppliers" className="text-sm font-bold text-foreground" onClick={() => setIsMenuOpen(false)}>
+                Supplier Intelligence
               </a>
               <a href="#how-it-works" className="text-sm font-bold text-foreground" onClick={() => setIsMenuOpen(false)}>
                 How It Works
-              </a>
-              <a href="#benefits" className="text-sm font-bold text-foreground" onClick={() => setIsMenuOpen(false)}>
-                Benefits
               </a>
               <Link href="/tenders" className="text-sm font-bold text-foreground" onClick={() => setIsMenuOpen(false)}>
                 Packages
@@ -1152,24 +1321,26 @@ function LoggedOutHome({
             <div className="lg:col-span-7 flex flex-col space-y-8">
               <Reveal>
                 <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full glass text-xs font-bold uppercase tracking-wider w-fit text-primary shadow-sm border border-primary/20">
-                  <Zap size={14} /> Next-Gen EPC Procurement & Bidding
+                  <Scale size={14} /> Centralized · Levelled · Compliant Procurement
                 </div>
               </Reveal>
 
               <Reveal delay={90}>
-                <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-[62px] font-extrabold text-foreground leading-[1.06] tracking-tight font-[family-name:var(--font-heading)]">
-                  Procurement & bidding{" "}
-                  <span className="text-gradient">intelligence</span> for every major sector
+                <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-[58px] font-extrabold text-foreground leading-[1.06] tracking-tight font-[family-name:var(--font-heading)]">
+                  Every bid centrally recorded.{" "}
+                  <span className="text-gradient">Levelled apple-to-apple.</span>{" "}
+                  Awarded with confidence.
                 </h1>
               </Reveal>
 
               <Reveal delay={180}>
                 <p className="text-lg md:text-xl text-muted-foreground leading-relaxed max-w-2xl">
-                  Connect Tier-1 EPC project owners and specialized contractors across{" "}
+                  ProSource records every offer in one registry, normalizes deviations, units, currencies, taxes,
+                  freight, and terms, and routes awards through an auditable approval board — for{" "}
                   <span className="text-foreground font-semibold">power</span>,{" "}
                   <span className="text-foreground font-semibold">infrastructure</span>,{" "}
                   <span className="text-foreground font-semibold">petrochemicals</span>, and{" "}
-                  <span className="text-foreground font-semibold">oil & gas</span>.
+                  <span className="text-foreground font-semibold">oil &amp; gas</span>.
                 </p>
               </Reveal>
 
@@ -1196,13 +1367,13 @@ function LoggedOutHome({
               <Reveal delay={340}>
                 <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs md:text-sm text-muted-foreground font-medium pt-2">
                   <span className="flex items-center gap-2">
-                    <CheckCircle2 size={16} className="text-primary" /> Verified Supplier Directory
+                    <CheckCircle2 size={16} className="text-primary" /> Central bid registry
                   </span>
                   <span className="flex items-center gap-2">
-                    <CheckCircle2 size={16} className="text-primary" /> Automated Bid Comparison
+                    <CheckCircle2 size={16} className="text-primary" /> Automated bid leveling
                   </span>
                   <span className="flex items-center gap-2">
-                    <CheckCircle2 size={16} className="text-primary" /> Zero Registration Fee
+                    <CheckCircle2 size={16} className="text-primary" /> Approval-board compliance
                   </span>
                 </div>
               </Reveal>
@@ -1235,31 +1406,51 @@ function LoggedOutHome({
               </Reveal>
             </div>
 
-            {/* Right Interactive Showcase */}
+            {/* Right Interactive Showcase — mini leveling preview */}
             <div className="lg:col-span-5 relative mt-6 lg:mt-0">
               <Reveal delay={200}>
                 <TiltCard>
-                  <div className="relative aspect-[4/3] rounded-3xl overflow-hidden border border-border shadow-[0_24px_64px_-16px_rgba(26,21,18,0.28)] dark:shadow-[0_24px_64px_-16px_rgba(0,0,0,0.7)] group">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src="/images/hero-refinery.jpg"
-                      alt="EPC industrial facility"
-                      className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-700"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent" />
-
-                    <div className="absolute bottom-6 left-6 right-6 glass rounded-2xl p-5 shadow-xl border border-white/20">
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-xs font-extrabold text-primary uppercase tracking-wider flex items-center gap-1">
-                          <Sparkles size={12} /> AI-Assisted Matchmaking
-                        </span>
-                        <span className="text-[11px] font-bold text-white bg-black/40 px-2 py-0.5 rounded-full">
-                          Live Portal
-                        </span>
+                  <div className="relative rounded-3xl overflow-hidden border border-border bg-card card-3d shadow-[0_24px_64px_-16px_rgba(26,21,18,0.28)] dark:shadow-[0_24px_64px_-16px_rgba(0,0,0,0.7)]">
+                    {/* Window chrome */}
+                    <div className="flex items-center justify-between px-5 py-3 border-b border-border bg-muted/40">
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-2.5 h-2.5 rounded-full bg-red-400/80" />
+                        <span className="w-2.5 h-2.5 rounded-full bg-amber-400/80" />
+                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-400/80" />
                       </div>
-                      <div className="text-sm font-bold text-white mb-1">Intelligent Package Evaluation</div>
-                      <div className="text-xs text-white/80 leading-relaxed">
-                        Matches project scopes with certified suppliers by capability and compliance.
+                      <span className="text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
+                        <GitCompareArrows size={12} className="text-primary" /> Bid Leveling · Live
+                      </span>
+                    </div>
+
+                    <div className="p-5 space-y-3">
+                      {[
+                        { name: "Gulf Steel Industries", tag: "Levelled L1", tagClass: "bg-emerald-500/12 text-emerald-600 dark:text-emerald-400", price: "SAR 1,398,500", flag: "Compliant", flagIcon: CheckCircle2, flagClass: "text-emerald-500" },
+                        { name: "Aramco Allied Metals", tag: "+2.1% after leveling", tagClass: "bg-amber-500/12 text-amber-600 dark:text-amber-400", price: "SAR 1,427,900", flag: "Spec deviation noted", flagIcon: CircleAlert, flagClass: "text-amber-500" },
+                        { name: "Red Sea Piping Co.", tag: "+5.8% after leveling", tagClass: "bg-blue-500/12 text-blue-600 dark:text-blue-400", price: "SAR 1,479,600", flag: "Quoted in EUR · normalized", flagIcon: ArrowLeftRight, flagClass: "text-blue-500" },
+                      ].map((row, i) => (
+                        <div key={i} className="flex items-center justify-between gap-3 p-3.5 rounded-xl bg-background border border-border">
+                          <div className="min-w-0">
+                            <div className="text-sm font-bold text-foreground truncate">{row.name}</div>
+                            <div className="flex items-center gap-1.5 mt-1">
+                              <row.flagIcon size={12} className={row.flagClass} />
+                              <span className="text-[11px] text-muted-foreground font-medium">{row.flag}</span>
+                            </div>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <div className="text-sm font-extrabold font-mono text-foreground">{row.price}</div>
+                            <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${row.tagClass}`}>
+                              {row.tag}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+
+                      <div className="flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-primary/[0.07] border border-primary/20">
+                        <span className="text-[11px] font-bold text-primary uppercase tracking-wider flex items-center gap-1.5">
+                          <Scale size={12} /> Apple-to-apple evaluated price
+                        </span>
+                        <span className="text-[11px] font-semibold text-muted-foreground">Units · FX · Taxes · Freight · Terms</span>
                       </div>
                     </div>
                   </div>
@@ -1268,11 +1459,11 @@ function LoggedOutHome({
                 {/* Floating Metric Badges */}
                 <div className="absolute -top-4 -right-3 glass rounded-2xl px-4 py-3 shadow-xl hidden sm:flex items-center gap-3 animate-chip-bob border border-border">
                   <div className="w-9 h-9 rounded-xl bg-emerald-500/15 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
-                    <TrendingUp size={18} />
+                    <Lock size={18} />
                   </div>
                   <div>
-                    <div className="text-sm font-extrabold text-foreground leading-none">99.4%</div>
-                    <div className="text-[11px] text-muted-foreground font-medium mt-0.5">On-time awards</div>
+                    <div className="text-sm font-extrabold text-foreground leading-none">100%</div>
+                    <div className="text-[11px] text-muted-foreground font-medium mt-0.5">Auditable trail</div>
                   </div>
                 </div>
 
@@ -1334,8 +1525,559 @@ function LoggedOutHome({
         </div>
       </section>
 
+      {/* ─── Why Centralized Procurement ─── */}
+      <section id="why-central" className="py-24 bg-muted/40 border-y border-border">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <SectionHeader
+            eyebrow="The Central Procurement Advantage"
+            title="Why teams move bidding out of inboxes and into ProSource"
+            description="When bids live in email threads and spreadsheets, comparisons are manual, deviations hide in attachments, and audits are painful. ProSource centralizes the entire cycle — so every decision is recorded, reviewed, levelled, and compliant."
+          />
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {centralPillars.map((pillar, i) => (
+              <Reveal key={pillar.title} delay={i * 90}>
+                <div className="group relative bg-card border border-border rounded-2xl p-6 card-3d card-sheen hover:border-primary/40 h-full">
+                  <div className="w-12 h-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center mb-4 group-hover:scale-110 group-hover:bg-primary group-hover:text-primary-foreground transition-all duration-300 shadow-sm">
+                    <pillar.icon size={24} />
+                  </div>
+                  <h3 className="text-base font-bold text-foreground mb-2 group-hover:text-primary transition-colors">
+                    {pillar.title}
+                  </h3>
+                  <p className="text-xs text-muted-foreground leading-relaxed">{pillar.description}</p>
+                </div>
+              </Reveal>
+            ))}
+          </div>
+
+          <Reveal delay={200}>
+            <div className="mt-10 bg-card border border-border rounded-2xl p-6 md:p-8 card-3d">
+              <div className="flex flex-col md:flex-row items-start md:items-center gap-5">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary to-[#a03d20] text-primary-foreground flex items-center justify-center shrink-0 shadow-lg shadow-primary/25 ring-top">
+                  <ShieldCheck size={24} />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-bold text-foreground mb-1">The outcome: decisions you can defend</h3>
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    Central recording means nothing is lost; structured review means nothing is missed; leveling means
+                    nothing is distorted; and the compliance layer means every award can be reconstructed, justified,
+                    and audited — months or years later.
+                  </p>
+                </div>
+                <Button
+                  onClick={() => router.push("/register?type=company")}
+                  className="rounded-xl px-6 text-sm font-bold shrink-0 shadow-md shadow-primary/20"
+                >
+                  Start Centralizing <ArrowRight size={15} className="ml-1.5" />
+                </Button>
+              </div>
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ─── BOQ Intelligence ─── */}
+      <section id="boq" className="py-24 bg-card border-b border-border">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-14 items-center">
+            {/* Copy */}
+            <div>
+              <Reveal>
+                <span className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-primary/10 text-primary text-xs font-bold uppercase tracking-wider mb-4">
+                  <FileSpreadsheet size={13} /> BOQ Intelligence
+                </span>
+                <h2 className="text-3xl md:text-5xl font-extrabold text-foreground tracking-tight mb-5 leading-tight">
+                  From BOQ document to biddable package in minutes
+                </h2>
+                <p className="text-base md:text-lg text-muted-foreground leading-relaxed mb-8">
+                  Stop rebuilding bills of quantities by hand. ProSource ingests the BOQ formats your engineering
+                  teams already produce and turns them into a structured, priced, supplier-ready package.
+                </p>
+              </Reveal>
+
+              <div className="space-y-4">
+                {boqPoints.map((point, i) => (
+                  <Reveal key={point.label} delay={i * 90}>
+                    <div className="flex items-start gap-4 p-4 rounded-2xl bg-background border border-border card-3d">
+                      <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                        <point.icon size={20} />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-foreground mb-1 flex items-center gap-2">
+                          {point.label}
+                          {point.label.includes("Coming Soon") && (
+                            <span className="px-2 py-0.5 rounded-full bg-amber-500/12 text-amber-600 dark:text-amber-400 text-[10px] font-extrabold uppercase tracking-wider">
+                              Roadmap
+                            </span>
+                          )}
+                        </h4>
+                        <p className="text-xs text-muted-foreground leading-relaxed">{point.text}</p>
+                      </div>
+                    </div>
+                  </Reveal>
+                ))}
+              </div>
+            </div>
+
+            {/* Visual — file → structured BOQ */}
+            <Reveal delay={150}>
+              <div className="relative">
+                <div className="bg-background border border-border rounded-3xl p-6 card-3d shadow-xl">
+                  {/* File chips */}
+                  <div className="flex flex-wrap items-center gap-3 mb-5">
+                    <span className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-red-500/[0.08] border border-red-500/25 text-xs font-bold text-foreground">
+                      <FileText size={14} className="text-red-500" /> BOQ_Rev3.pdf
+                    </span>
+                    <span className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-emerald-500/[0.08] border border-emerald-500/25 text-xs font-bold text-foreground">
+                      <FileSpreadsheet size={14} className="text-emerald-500" /> pricing_template.xlsx
+                    </span>
+                    <span className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-muted border border-dashed border-border text-xs font-bold text-muted-foreground">
+                      <ScanLine size={14} className="text-amber-500" /> drawings.dwg
+                      <span className="px-1.5 py-0.5 rounded-full bg-amber-500/12 text-amber-600 dark:text-amber-400 text-[9px] font-extrabold uppercase">Soon</span>
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-center gap-2 text-xs font-bold text-primary uppercase tracking-widest mb-5">
+                    <span className="h-px flex-1 bg-gradient-to-r from-transparent to-primary/40" />
+                    <Cpu size={14} /> Parsed &amp; standardized
+                    <span className="h-px flex-1 bg-gradient-to-l from-transparent to-primary/40" />
+                  </div>
+
+                  {/* Mini BOQ table */}
+                  <div className="rounded-xl border border-border overflow-hidden">
+                    <div className="grid grid-cols-[64px_1fr_56px_56px] gap-2 px-4 py-2.5 bg-muted/60 text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground">
+                      <span>Code</span><span>Description</span><span className="text-right">Qty</span><span className="text-right">Unit</span>
+                    </div>
+                    {[
+                      ["M-1042", 'CS Pipe 6" SCH40, API 5L Gr.X52', "1,200", "m"],
+                      ["M-1043", "Gate Valve 6\" CL600, RF", "24", "no"],
+                      ["E-2081", "XLPE Cable 3C x 185 mm², 33kV", "3,400", "m"],
+                      ["S-0917", "Structural Steel S355JR, beams", "86", "ton"],
+                    ].map((row, i) => (
+                      <div key={i} className="grid grid-cols-[64px_1fr_56px_56px] gap-2 px-4 py-2.5 border-t border-border text-xs">
+                        <span className="font-mono font-bold text-primary">{row[0]}</span>
+                        <span className="text-foreground font-medium truncate">{row[1]}</span>
+                        <span className="text-right font-mono text-muted-foreground">{row[2]}</span>
+                        <span className="text-right font-mono text-muted-foreground">{row[3]}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="mt-4 flex items-center justify-between">
+                    <span className="text-[11px] font-semibold text-muted-foreground flex items-center gap-1.5">
+                      <CheckCircle2 size={13} className="text-emerald-500" /> 4 of 212 rows previewed
+                    </span>
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/10 text-primary text-[10px] font-extrabold uppercase tracking-wider">
+                      <Gauge size={11} /> RFQ health score ready
+                    </span>
+                  </div>
+                </div>
+
+                {/* Floating badge */}
+                <div className="absolute -bottom-5 -left-4 glass rounded-2xl px-4 py-3 shadow-xl hidden sm:flex items-center gap-3 animate-chip-bob border border-border">
+                  <div className="w-9 h-9 rounded-xl bg-primary/15 flex items-center justify-center text-primary">
+                    <Timer size={18} />
+                  </div>
+                  <div>
+                    <div className="text-sm font-extrabold text-foreground leading-none">~10 min</div>
+                    <div className="text-[11px] text-muted-foreground font-medium mt-0.5">BOQ to live RFQ</div>
+                  </div>
+                </div>
+              </div>
+            </Reveal>
+          </div>
+        </div>
+      </section>
+
+      {/* ─── Supplier Intelligence & Auto-Matching ─── */}
+      <section id="suppliers" className="py-24 bg-background">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-14 items-center">
+            {/* Visual — auto-match with human approval gate */}
+            <Reveal className="order-2 lg:order-1">
+              <div className="bg-card border border-border rounded-3xl p-6 card-3d shadow-xl">
+                <div className="flex items-center justify-between mb-5">
+                  <span className="text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
+                    <Radar size={12} className="text-primary" /> Scope · CS Piping Package — 1,200 m
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full bg-blue-500/12 text-blue-600 dark:text-blue-400 text-[10px] font-extrabold uppercase tracking-wider">
+                    Auto-matched
+                  </span>
+                </div>
+
+                <div className="space-y-3">
+                  {[
+                    { name: "Gulf Steel Industries", group: "Piping & Fittings · Group A", match: 96 },
+                    { name: "Aramco Allied Metals", group: "Piping & Fittings · Group A", match: 91 },
+                    { name: "Red Sea Piping Co.", group: "Piping · Stockist · Group B", match: 84 },
+                  ].map((s, i) => (
+                    <div key={i} className="flex items-center justify-between gap-3 p-3.5 rounded-xl bg-background border border-border">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-9 h-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center font-extrabold text-xs shrink-0">
+                          {s.name.split(" ").map((w) => w[0]).slice(0, 2).join("")}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-sm font-bold text-foreground truncate">{s.name}</div>
+                          <div className="text-[11px] text-muted-foreground font-medium truncate">{s.group}</div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0">
+                        <div className="text-right">
+                          <div className="text-sm font-extrabold text-foreground">{s.match}%</div>
+                          <div className="w-16 h-1.5 rounded-full bg-muted overflow-hidden">
+                            <div className="h-full rounded-full bg-gradient-to-r from-primary to-emerald-500" style={{ width: `${s.match}%` }} />
+                          </div>
+                        </div>
+                        <input type="checkbox" defaultChecked className="w-4 h-4 accent-[#c1502e]" aria-label={`Approve invite for ${s.name}`} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Human approval gate */}
+                <div className="mt-5 p-4 rounded-xl bg-amber-500/[0.08] border border-amber-500/30 flex items-start gap-3">
+                  <UserCheck size={18} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                  <div>
+                    <div className="text-xs font-bold text-foreground">Human approval required</div>
+                    <p className="text-[11px] text-muted-foreground leading-relaxed mt-0.5">
+                      Suggestions are only suggestions — invites are sent <span className="font-semibold text-foreground">only after your team approves</span> the list. Full control, zero spam to the market.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </Reveal>
+
+            {/* Copy */}
+            <div className="order-1 lg:order-2">
+              <Reveal>
+                <span className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-primary/10 text-primary text-xs font-bold uppercase tracking-wider mb-4">
+                  <Network size={13} /> Supplier Intelligence
+                </span>
+                <h2 className="text-3xl md:text-5xl font-extrabold text-foreground tracking-tight mb-5 leading-tight">
+                  The right suppliers, suggested — never auto-invited
+                </h2>
+                <p className="text-base md:text-lg text-muted-foreground leading-relaxed mb-8">
+                  Suppliers are classified into relevant material and service groups. When you publish a scope,
+                  ProSource auto-matches and auto-suggests the strongest invite list — but nothing reaches the market
+                  until a human says so.
+                </p>
+              </Reveal>
+
+              <div className="space-y-4">
+                {[
+                  { icon: Layers, title: "Classified into Relevant Groups", text: "Vendors are organized by material classes, service codes, and capability tiers — piping, electrical, civil, rotating equipment, and more." },
+                  { icon: Target, title: "Auto-Match & Auto-Suggest", text: "Scope requirements are matched against supplier classifications, certifications, and track record to propose a ranked invite list." },
+                  { icon: UserCheck, title: "Human-Approved Invites", text: "Your procurement team reviews, trims, or extends the list — invitations are dispatched only after explicit approval." },
+                  { icon: Gauge, title: "RFQ Health Score Before Publish", text: "Completeness of BOQ, specs, terms, and attachments is scored so weak packages never go out and weak bids never come back." },
+                ].map((point, i) => (
+                  <Reveal key={point.title} delay={i * 90}>
+                    <div className="flex items-start gap-4 p-4 rounded-2xl bg-card border border-border card-3d">
+                      <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                        <point.icon size={20} />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-foreground mb-1">{point.title}</h4>
+                        <p className="text-xs text-muted-foreground leading-relaxed">{point.text}</p>
+                      </div>
+                    </div>
+                  </Reveal>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ─── Bid Leveling — flagship dark section ─── */}
+      <section id="leveling" className="relative py-24 bg-[#100e0c] noise overflow-hidden">
+        <div
+          className="absolute inset-0 opacity-25 pointer-events-none"
+          style={{
+            background:
+              "radial-gradient(circle at 15% 20%, rgba(193,80,46,0.35) 0%, transparent 45%), radial-gradient(circle at 85% 80%, rgba(217,119,6,0.25) 0%, transparent 45%)",
+          }}
+        />
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <SectionHeader
+            dark
+            eyebrow="Bid Leveling Engine"
+            title="Apple-to-apple, down to the last line item"
+            description="Headline prices lie. ProSource levels every offer — surfacing missed items, flagging deviations, and normalizing units, currency, taxes, freight, payment terms, and lead times — so the comparison statement reflects the true evaluated cost."
+          />
+
+          {/* Mock leveling table */}
+          <Reveal>
+            <div className="rounded-3xl border border-white/10 bg-white/[0.04] backdrop-blur-sm overflow-hidden shadow-2xl">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
+                <span className="text-[11px] font-extrabold uppercase tracking-widest text-white/60 flex items-center gap-2">
+                  <Table2 size={13} className="text-primary" /> Levelled Comparison · PKG-1042 CS Piping
+                </span>
+                <span className="px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-400 text-[10px] font-extrabold uppercase tracking-wider">
+                  Auto-generated
+                </span>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm min-w-[720px]">
+                  <thead>
+                    <tr className="text-[10px] uppercase tracking-widest text-white/50 border-b border-white/10">
+                      <th className="text-left font-extrabold px-6 py-3">Leveling Check</th>
+                      <th className="text-left font-extrabold px-4 py-3">Gulf Steel Ind.</th>
+                      <th className="text-left font-extrabold px-4 py-3">Aramco Allied</th>
+                      <th className="text-left font-extrabold px-4 py-3">Red Sea Piping</th>
+                    </tr>
+                  </thead>
+                  <tbody className="text-white/85">
+                    {[
+                      {
+                        check: "BOQ coverage",
+                        a: { text: "212 / 212 items", chip: "Complete", cls: "bg-emerald-500/15 text-emerald-400" },
+                        b: { text: "212 / 212 items", chip: "Complete", cls: "bg-emerald-500/15 text-emerald-400" },
+                        c: { text: "206 / 212 items", chip: "6 missed — priced in", cls: "bg-red-500/15 text-red-400" },
+                      },
+                      {
+                        check: "Specification",
+                        a: { text: "API 5L Gr.X52", chip: "Compliant", cls: "bg-emerald-500/15 text-emerald-400" },
+                        b: { text: "API 5L Gr.B offered", chip: "Deviation flagged", cls: "bg-amber-500/15 text-amber-400" },
+                        c: { text: "API 5L Gr.X52", chip: "Compliant", cls: "bg-emerald-500/15 text-emerald-400" },
+                      },
+                      {
+                        check: "Units & currency",
+                        a: { text: "m · SAR", chip: "As bid", cls: "bg-emerald-500/15 text-emerald-400" },
+                        b: { text: "m · SAR", chip: "As bid", cls: "bg-emerald-500/15 text-emerald-400" },
+                        c: { text: "ft · EUR", chip: "Normalized", cls: "bg-blue-500/15 text-blue-400" },
+                      },
+                      {
+                        check: "Taxes & freight",
+                        a: { text: "Excl. VAT · DDP site", chip: "Equalized", cls: "bg-blue-500/15 text-blue-400" },
+                        b: { text: "Incl. VAT · FOB port", chip: "Equalized", cls: "bg-blue-500/15 text-blue-400" },
+                        c: { text: "Excl. VAT · Ex-works", chip: "Equalized", cls: "bg-blue-500/15 text-blue-400" },
+                      },
+                      {
+                        check: "Payment · delivery",
+                        a: { text: "30 days · 8 wks", chip: "On terms", cls: "bg-emerald-500/15 text-emerald-400" },
+                        b: { text: "60 days · 14 wks", chip: "Schedule risk", cls: "bg-amber-500/15 text-amber-400" },
+                        c: { text: "45 days · 10 wks", chip: "Levelled", cls: "bg-blue-500/15 text-blue-400" },
+                      },
+                    ].map((row, i) => (
+                      <tr key={i} className="border-b border-white/5">
+                        <td className="px-6 py-3.5 text-xs font-bold text-white/70">{row.check}</td>
+                        {[row.a, row.b, row.c].map((cell, j) => (
+                          <td key={j} className="px-4 py-3.5">
+                            <div className="text-xs font-semibold">{cell.text}</div>
+                            <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold ${cell.cls}`}>
+                              {cell.chip}
+                            </span>
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                    <tr className="bg-white/[0.05]">
+                      <td className="px-6 py-4 text-xs font-extrabold text-white uppercase tracking-wider">Evaluated price</td>
+                      <td className="px-4 py-4">
+                        <span className="font-mono font-extrabold text-emerald-400">SAR 1,398,500</span>
+                        <span className="ml-2 px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-extrabold">L1</span>
+                      </td>
+                      <td className="px-4 py-4 font-mono font-bold text-white/80">SAR 1,427,900</td>
+                      <td className="px-4 py-4 font-mono font-bold text-white/80">SAR 1,479,600</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </Reveal>
+
+          {/* Leveling checks grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mt-12">
+            {levelingChecks.map((check, i) => (
+              <Reveal key={check.title} delay={(i % 4) * 80}>
+                <div className="group h-full rounded-2xl border border-white/10 bg-white/[0.04] p-5 hover:bg-white/[0.07] hover:border-primary/40 transition-all duration-300">
+                  <div className="w-10 h-10 rounded-xl bg-primary/15 text-primary flex items-center justify-center mb-3 group-hover:scale-110 transition-transform duration-300">
+                    <check.icon size={19} />
+                  </div>
+                  <h3 className="text-sm font-bold text-white mb-1.5">{check.title}</h3>
+                  <p className="text-[11px] text-white/60 leading-relaxed">{check.description}</p>
+                </div>
+              </Reveal>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ─── Evaluation → Award Pipeline ─── */}
+      <section className="py-24 bg-background border-b border-border">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <SectionHeader
+            eyebrow="Evaluation to Award"
+            title="A governed pipeline from first offer to signed PO"
+            description="Six disciplined stages carry every package from receipt of bids to contract — with the audit trail captured automatically along the way."
+          />
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {pipelineSteps.map((step, i) => (
+              <Reveal key={step.title} delay={(i % 3) * 90}>
+                <div className="group relative bg-card border border-border rounded-2xl p-6 card-3d card-sheen hover:border-primary/40 h-full">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="w-11 h-11 rounded-xl bg-primary/10 text-primary flex items-center justify-center group-hover:scale-110 group-hover:bg-primary group-hover:text-primary-foreground transition-all duration-300 shadow-sm">
+                      <step.icon size={21} />
+                    </div>
+                    <span className="text-3xl font-extrabold text-muted-foreground/25 font-[family-name:var(--font-heading)]">
+                      {String(i + 1).padStart(2, "0")}
+                    </span>
+                  </div>
+                  <h3 className="text-base font-bold text-foreground mb-2 group-hover:text-primary transition-colors">
+                    {step.title}
+                  </h3>
+                  <p className="text-xs text-muted-foreground leading-relaxed">{step.description}</p>
+                </div>
+              </Reveal>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ─── Supplier Analytics & Scorecards ─── */}
+      <section className="py-24 bg-muted/40 border-b border-border">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <SectionHeader
+            eyebrow="Supplier Analytics"
+            title="Know your suppliers before you award"
+            description="Behaviour fingerprints, scorecards, and market signals built from every interaction on the platform — so sourcing decisions lean on evidence, not anecdotes."
+          />
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {/* Behaviour fingerprint mock */}
+            <Reveal>
+              <div className="bg-card border border-border rounded-3xl p-7 card-3d h-full">
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-3">
+                    <div className="w-11 h-11 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+                      <Fingerprint size={22} />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-bold text-foreground">Behaviour Fingerprint</h3>
+                      <p className="text-[11px] text-muted-foreground">Gulf Steel Industries · captured automatically</p>
+                    </div>
+                  </div>
+                  <span className="px-2.5 py-1 rounded-full bg-emerald-500/12 text-emerald-600 dark:text-emerald-400 text-[10px] font-extrabold uppercase tracking-wider">
+                    Reliable
+                  </span>
+                </div>
+
+                <div className="space-y-4">
+                  {[
+                    { label: "Invitation response rate", value: 94, note: "47 of 50 invites answered" },
+                    { label: "On-time submission", value: 98, note: "1 late submission in 2 years" },
+                    { label: "Quote competitiveness", value: 86, note: "Within 3% of L1 on average" },
+                    { label: "Clarification discipline", value: 90, note: "Clear, documented deviations" },
+                  ].map((row) => (
+                    <div key={row.label}>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-xs font-bold text-foreground">{row.label}</span>
+                        <span className="text-xs font-extrabold text-primary">{row.value}%</span>
+                      </div>
+                      <div className="h-2 rounded-full bg-muted overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-gradient-to-r from-primary to-emerald-500 transition-all duration-700"
+                          style={{ width: `${row.value}%` }}
+                        />
+                      </div>
+                      <p className="text-[10px] text-muted-foreground mt-1">{row.note}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-6 pt-5 border-t border-border flex items-center gap-2 text-[11px] text-muted-foreground">
+                  <Activity size={13} className="text-primary" />
+                  Fingerprint updates on every bid, revision, clarification, and delivery.
+                </div>
+              </div>
+            </Reveal>
+
+            {/* Scorecard signals */}
+            <Reveal delay={120}>
+              <div className="bg-card border border-border rounded-3xl p-7 card-3d h-full">
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-3">
+                    <div className="w-11 h-11 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+                      <Award size={22} />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-bold text-foreground">Supplier Scorecard</h3>
+                      <p className="text-[11px] text-muted-foreground">Evidence-based sourcing signals</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-2xl font-extrabold text-foreground font-[family-name:var(--font-heading)]">A+</div>
+                    <div className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Grade</div>
+                  </div>
+                </div>
+
+                <div className="grid gap-4">
+                  {scorecardSignals.map((signal) => (
+                    <div key={signal.title} className="flex items-start gap-4 p-4 rounded-2xl bg-background border border-border">
+                      <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                        <signal.icon size={19} />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-foreground mb-0.5">{signal.title}</h4>
+                        <p className="text-xs text-muted-foreground leading-relaxed">{signal.description}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </Reveal>
+          </div>
+
+          {/* RFQ health score strip */}
+          <Reveal delay={180}>
+            <div className="mt-8 bg-card border border-border rounded-2xl p-6 md:p-7 card-3d flex flex-col md:flex-row items-start md:items-center gap-6">
+              <div className="flex items-center gap-4 shrink-0">
+                <div className="relative w-16 h-16">
+                  <svg viewBox="0 0 64 64" className="w-16 h-16 -rotate-90">
+                    <circle cx="32" cy="32" r="27" fill="none" stroke="currentColor" strokeWidth="6" className="text-muted" />
+                    <circle
+                      cx="32" cy="32" r="27" fill="none" stroke="currentColor" strokeWidth="6" strokeLinecap="round"
+                      strokeDasharray={`${2 * Math.PI * 27}`}
+                      strokeDashoffset={`${2 * Math.PI * 27 * (1 - 0.87)}`}
+                      className="text-primary"
+                    />
+                  </svg>
+                  <span className="absolute inset-0 flex items-center justify-center text-sm font-extrabold text-foreground">87</span>
+                </div>
+                <div>
+                  <div className="text-sm font-extrabold text-foreground">RFQ Health Score</div>
+                  <div className="text-[11px] text-muted-foreground">Computed before publish</div>
+                </div>
+              </div>
+              <div className="flex-1 grid grid-cols-2 md:grid-cols-4 gap-3 w-full">
+                {[
+                  { label: "BOQ completeness", ok: true },
+                  { label: "Specs attached", ok: true },
+                  { label: "Delivery terms defined", ok: true },
+                  { label: "Evaluation criteria set", ok: false },
+                ].map((item) => (
+                  <div key={item.label} className="flex items-center gap-2 text-xs font-semibold">
+                    {item.ok ? (
+                      <CheckCircle2 size={14} className="text-emerald-500 shrink-0" />
+                    ) : (
+                      <CircleAlert size={14} className="text-amber-500 shrink-0" />
+                    )}
+                    <span className={item.ok ? "text-foreground" : "text-amber-600 dark:text-amber-400"}>{item.label}</span>
+                  </div>
+                ))}
+              </div>
+              <span className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/10 text-primary text-[11px] font-extrabold uppercase tracking-wider">
+                <HeartPulse size={12} /> Stronger RFQs → stronger bids
+              </span>
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
       {/* ─── Sectors We Serve (Interactive Grid) ─── */}
-      <section id="sectors" className="py-24 bg-muted/40 border-y border-border">
+      <section id="sectors" className="py-24 bg-background">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <SectionHeader
             eyebrow="Specialized EPC Sectors"
@@ -1390,12 +2132,12 @@ function LoggedOutHome({
       </section>
 
       {/* ─── Platform Features Matrix ─── */}
-      <section id="features" className="py-24 bg-card">
+      <section id="features" className="py-24 bg-card border-y border-border">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <SectionHeader
             eyebrow="Platform Capabilities"
-            title="Intelligent features built for modern EPC workflows"
-            description="Eliminate procurement blindspots with automated tendering, vendor verification, and side-by-side bid comparison."
+            title="Everything a modern procurement team needs, in one stack"
+            description="From BOQ ingestion to signed PO — a complete, integrated toolkit for transparent and compliant EPC bidding."
           />
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -1423,8 +2165,8 @@ function LoggedOutHome({
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <SectionHeader
             eyebrow="Workflow Process"
-            title="How ProSource streamlines your tendering cycle"
-            description="A transparent 6-step journey from initial RFP publication to verified contractor award."
+            title="How ProSource runs your tendering cycle"
+            description="A transparent six-step journey from BOQ import to audited contract award."
           />
 
           <div className="relative max-w-4xl mx-auto mt-16">
@@ -1492,7 +2234,7 @@ function LoggedOutHome({
                   </div>
                   <div>
                     <h3 className="text-2xl font-bold text-foreground font-[family-name:var(--font-heading)]">For EPC Project Owners</h3>
-                    <p className="text-xs text-muted-foreground">Operators, Main EPC Contractors & Sourcing Directors</p>
+                    <p className="text-xs text-muted-foreground">Operators, Main EPC Contractors &amp; Sourcing Directors</p>
                   </div>
                 </div>
                 <div className="grid gap-4">
@@ -1519,7 +2261,7 @@ function LoggedOutHome({
                   </div>
                   <div>
                     <h3 className="text-2xl font-bold text-foreground font-[family-name:var(--font-heading)]">For Specialized Suppliers</h3>
-                    <p className="text-xs text-muted-foreground">Equipment Manufacturers, Subcontractors & Service Vendors</p>
+                    <p className="text-xs text-muted-foreground">Equipment Manufacturers, Subcontractors &amp; Service Vendors</p>
                   </div>
                 </div>
                 <div className="grid gap-4">
@@ -1593,13 +2335,14 @@ function LoggedOutHome({
         <div className="relative max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center z-10">
           <Reveal>
             <span className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-white/15 text-white text-xs font-bold uppercase tracking-wider mb-6 backdrop-blur-sm">
-              ⚡ Start In Minutes
+              <Zap size={12} /> Start In Minutes
             </span>
             <h2 className="text-3xl sm:text-4xl md:text-5xl font-extrabold text-white mb-5 tracking-tight font-[family-name:var(--font-heading)]">
-              Ready to transform your EPC bidding?
+              Ready for procurement you can defend in any audit?
             </h2>
             <p className="text-base sm:text-lg text-white/90 mb-10 leading-relaxed max-w-xl mx-auto">
-              Join leading EPC operators and specialized contractors who use ProSource to run transparent, compliant procurement.
+              Join EPC operators and specialized contractors running centrally recorded, levelled, apple-to-apple
+              bidding on ProSource.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <Button
@@ -1638,16 +2381,17 @@ function LoggedOutHome({
                 <span className="text-xl font-bold text-white font-[family-name:var(--font-heading)]">ProSource</span>
               </div>
               <p className="text-muted-foreground text-xs leading-relaxed max-w-xs">
-                Next-generation procurement and bidding platform for EPC companies, project developers, and specialized suppliers.
+                Centralized, levelled, and compliant procurement &amp; bidding for EPC companies, project developers, and specialized suppliers.
               </p>
             </div>
 
             <div>
               <h4 className="font-bold text-white text-sm uppercase tracking-wider mb-5">Platform Modules</h4>
               <ul className="space-y-3 text-xs">
-                <li><Link href="/tenders" className="text-muted-foreground hover:text-white transition-colors">Tender Packages</Link></li>
-                <li><Link href="/vendors" className="text-muted-foreground hover:text-white transition-colors">Suppliers Directory</Link></li>
-                <li><Link href="/bids" className="text-muted-foreground hover:text-white transition-colors">Bid Proposals</Link></li>
+                <li><a href="#boq" className="text-muted-foreground hover:text-white transition-colors">BOQ Import (PDF &amp; Excel)</a></li>
+                <li><a href="#leveling" className="text-muted-foreground hover:text-white transition-colors">Bid Leveling Engine</a></li>
+                <li><a href="#suppliers" className="text-muted-foreground hover:text-white transition-colors">Supplier Auto-Matching</a></li>
+                <li><a href="#features" className="text-muted-foreground hover:text-white transition-colors">Comparison Statements</a></li>
                 <li><Link href="/documents" className="text-muted-foreground hover:text-white transition-colors">Document Vault</Link></li>
               </ul>
             </div>
@@ -1655,15 +2399,15 @@ function LoggedOutHome({
             <div>
               <h4 className="font-bold text-white text-sm uppercase tracking-wider mb-5">EPC Sectors</h4>
               <ul className="space-y-3 text-xs">
-                <li><a href="#sectors" className="text-muted-foreground hover:text-white transition-colors">Power & Renewables</a></li>
-                <li><a href="#sectors" className="text-muted-foreground hover:text-white transition-colors">Infrastructure & Civil</a></li>
+                <li><a href="#sectors" className="text-muted-foreground hover:text-white transition-colors">Power &amp; Renewables</a></li>
+                <li><a href="#sectors" className="text-muted-foreground hover:text-white transition-colors">Infrastructure &amp; Civil</a></li>
                 <li><a href="#sectors" className="text-muted-foreground hover:text-white transition-colors">Petrochemicals</a></li>
-                <li><a href="#sectors" className="text-muted-foreground hover:text-white transition-colors">Oil & Gas Upstream</a></li>
+                <li><a href="#sectors" className="text-muted-foreground hover:text-white transition-colors">Oil &amp; Gas Upstream</a></li>
               </ul>
             </div>
 
             <div>
-              <h4 className="font-bold text-white text-sm uppercase tracking-wider mb-5">Account & Access</h4>
+              <h4 className="font-bold text-white text-sm uppercase tracking-wider mb-5">Account &amp; Access</h4>
               <ul className="space-y-3 text-xs">
                 <li><Link href="/login" className="text-muted-foreground hover:text-white transition-colors">Sign In</Link></li>
                 <li><Link href="/register?type=company" className="text-muted-foreground hover:text-white transition-colors">EPC Owner Registration</Link></li>

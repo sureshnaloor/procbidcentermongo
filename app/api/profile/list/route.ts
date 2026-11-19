@@ -52,11 +52,16 @@ export async function GET(req: NextRequest) {
   ]);
 
   const typeById = new Map(types.map((t) => [t._id!.toString(), t]));
-  const groupById = new Map(groups.map((g) => [g._id!.toString(), {
-    _id: g._id,
-    name: g.name,
-    category: typeById.get(g.typeId.toString())?.category ?? 'material',
-  }]));
+  const groupById = new Map(groups.map((g) => {
+    const parentType = typeById.get(g.typeId.toString());
+    return [g._id!.toString(), {
+      _id: g._id,
+      name: g.name,
+      typeId: g.typeId,
+      typeName: parentType?.name,
+      category: parentType?.category ?? 'material',
+    }];
+  }));
   const docsByVendor = new Map(docCounts.map((row) => [row._id.toString(), row.count]));
 
   const safeItems = items.map((profile) => {

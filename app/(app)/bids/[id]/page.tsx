@@ -442,7 +442,7 @@ export default function BidDetailPage({ params }: { params: Promise<{ id: string
       )}
 
       {/* Bid details */}
-      <Card className="glass card-3d border-0">
+      <Card className="rounded-2xl card-3d border-border bg-card">
         <CardHeader><CardTitle className="text-base font-[family-name:var(--font-heading)]">Bid Summary</CardTitle></CardHeader>
         <CardContent className="grid grid-cols-2 gap-4 text-sm">
           {bid.totalPrice && <div><span className="text-muted-foreground">Total Price</span><div className="font-semibold">{bid.currency} {bid.totalPrice.toLocaleString()}</div></div>}
@@ -536,7 +536,7 @@ export default function BidDetailPage({ params }: { params: Promise<{ id: string
       </Card>
 
       {bid.lineItems?.length > 0 && (
-        <Card className="glass card-3d border-0">
+        <Card className="rounded-2xl card-3d border-border bg-card">
           <CardHeader><CardTitle className="text-base font-[family-name:var(--font-heading)]">Line Items ({bid.currency})</CardTitle></CardHeader>
           <CardContent className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -588,7 +588,7 @@ export default function BidDetailPage({ params }: { params: Promise<{ id: string
       )}
 
       {(bid.clauseResponses?.length > 0 || bid.tender?.clauses?.length > 0) && (
-        <Card className="glass card-3d border-0">
+        <Card className="rounded-2xl card-3d border-border bg-card">
           <CardHeader>
             <CardTitle className="text-base font-[family-name:var(--font-heading)]">Terms response</CardTitle>
             <p className="text-xs text-muted-foreground mt-1">Edited wording is shown in red so the company and supplier can see every change.</p>
@@ -622,15 +622,15 @@ export default function BidDetailPage({ params }: { params: Promise<{ id: string
       )}
 
       {bid.technicalProposal && (
-        <Card className="glass card-3d border-0"><CardHeader><CardTitle className="text-base font-[family-name:var(--font-heading)]">Technical Proposal</CardTitle></CardHeader><CardContent><p className="text-sm text-foreground whitespace-pre-wrap">{bid.technicalProposal}</p></CardContent></Card>
+        <Card className="rounded-2xl card-3d border-border bg-card"><CardHeader><CardTitle className="text-base font-[family-name:var(--font-heading)]">Technical Proposal</CardTitle></CardHeader><CardContent><p className="text-sm text-foreground whitespace-pre-wrap">{bid.technicalProposal}</p></CardContent></Card>
       )}
       {bid.commercialProposal && (
-        <Card className="glass card-3d border-0"><CardHeader><CardTitle className="text-base font-[family-name:var(--font-heading)]">Commercial Proposal</CardTitle></CardHeader><CardContent><p className="text-sm text-foreground whitespace-pre-wrap">{bid.commercialProposal}</p></CardContent></Card>
+        <Card className="rounded-2xl card-3d border-border bg-card"><CardHeader><CardTitle className="text-base font-[family-name:var(--font-heading)]">Commercial Proposal</CardTitle></CardHeader><CardContent><p className="text-sm text-foreground whitespace-pre-wrap">{bid.commercialProposal}</p></CardContent></Card>
       )}
 
       {/* History */}
       {bid.history?.length > 0 && (
-        <Card className="glass card-3d border-0">
+        <Card className="rounded-2xl card-3d border-border bg-card">
           <CardHeader><CardTitle className="text-base font-[family-name:var(--font-heading)]">Bid History</CardTitle></CardHeader>
           <CardContent className="space-y-2">
             {bid.history.map((h: any, i: number) => (
@@ -647,7 +647,7 @@ export default function BidDetailPage({ params }: { params: Promise<{ id: string
       )}
 
       {bid.versions?.length > 0 && (
-        <Card className="glass card-3d border-0">
+        <Card className="rounded-2xl card-3d border-border bg-card">
           <CardHeader><CardTitle className="text-base font-[family-name:var(--font-heading)]">Original and revised versions</CardTitle></CardHeader>
           <CardContent className="space-y-3">
             {bid.versions.map((v: any) => (

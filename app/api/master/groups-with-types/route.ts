@@ -1,11 +1,14 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { collections } from '@/lib/db';
 import { ensureDefaults } from '@/lib/seed-defaults';
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   await ensureDefaults();
+  const category = req.nextUrl.searchParams.get('category');
   const { materialServiceTypes, materialServiceGroups } = await collections();
-  const types = await materialServiceTypes.find({}).toArray();
+
+  const typeFilter = category ? { category: category as 'material' | 'service' } : {};
+  const types = await materialServiceTypes.find(typeFilter).toArray();
   const groups = await materialServiceGroups.find({}).sort({ name: 1 }).toArray();
   const categoryOrder = { material: 0, service: 1 };
   const result = types

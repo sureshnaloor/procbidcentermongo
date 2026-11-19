@@ -13,6 +13,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const data = z.object({
     code: z.string().min(1).max(100).optional(),
     description: z.string().optional(),
+    unit: z.string().optional(),
     groupId: z.string().optional(),
   }).parse(body);
   const update: Record<string, unknown> = { ...data, updatedAt: new Date() };

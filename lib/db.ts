@@ -1,7 +1,7 @@
 import { getDb } from './mongodb';
 import type {
   IUser, IProfile, IMaterialServiceType, IMaterialServiceGroup, IMaterialServiceItem,
-  ITender, IBid, IBidHistory, IVendorQualification, IDocument, IMessage,
+  ITender, IBid, IBidHistory, IVendorQualification, IVendorEvaluation, IDocument, IMessage,
   IMessageChannel, INotification, IContactSubmission, IClauseTemplate, ITenderInvite, IVendorBlacklist,
   IOfflineInvite
 } from './types';
@@ -18,6 +18,7 @@ export async function collections() {
     bids: db.collection<IBid>('bids'),
     bidHistory: db.collection<IBidHistory>('bidHistory'),
     vendorQualifications: db.collection<IVendorQualification>('vendorQualifications'),
+    vendorEvaluations: db.collection<IVendorEvaluation>('vendorEvaluations'),
     tenderInvites: db.collection<ITenderInvite>('tenderInvites'),
     vendorBlacklist: db.collection<IVendorBlacklist>('vendorBlacklist'),
     offlineInvites: db.collection<IOfflineInvite>('offlineInvites'),
@@ -87,6 +88,10 @@ export async function ensureIndexes() {
       partialFilterExpression: { kind: 'custom' },
     }
   );
+  // Vendor Evaluations
+  await cols.vendorEvaluations.createIndex({ companyProfileId: 1, vendorProfileId: 1 });
+  await cols.vendorEvaluations.createIndex({ vendorProfileId: 1 });
+  await cols.vendorEvaluations.createIndex({ createdAt: -1 });
   // Documents
   await cols.documents.createIndex({ profileId: 1 });
   // Messages

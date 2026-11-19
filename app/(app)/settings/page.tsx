@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, LogOut, User, Upload, Trash2, FileText, Plus } from "lucide-react";
+import { Loader2, LogOut, User, Upload, Trash2, FileText, Plus, Settings } from "lucide-react";
 import { PUBLIC_DOCUMENT_CATEGORIES } from "@/lib/constants";
 
 const emptyCompany = {
@@ -379,7 +379,7 @@ function SettingsClient() {
   }
 
   const vendorProfileForm = (
-    <Card className="glass card-3d border-0">
+    <Card className="rounded-2xl card-3d border-border bg-card">
       <CardHeader>
         <CardTitle className="text-base font-[family-name:var(--font-heading)]">Supplier profile</CardTitle>
         <p className="text-xs text-muted-foreground">Add or update the details EPC companies see when they contact you.</p>
@@ -431,30 +431,36 @@ function SettingsClient() {
           {(groupTypes as any[]).length === 0 ? (
             <p className="text-xs text-muted-foreground">No groups are configured yet. Ask an administrator to add them in Global Masters.</p>
           ) : (
-            (groupTypes as any[]).map((type: any) => (
-              <div key={type._id} className="space-y-2">
-                <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{type.category === "service" ? "Service groups" : "Material groups"}</div>
-                <div className="flex flex-wrap gap-2">
-                  {(type.groups ?? []).map((g: any) => {
-                    const selected = capabilityGroupIds.includes(String(g._id));
-                    return (
-                      <button
-                        key={g._id}
-                        type="button"
-                        onClick={() => setCapabilityGroupIds((prev) => selected ? prev.filter((id) => id !== String(g._id)) : [...prev, String(g._id)])}
-                        className={`text-xs px-2.5 py-1 rounded-full border transition-all ${
-                          selected
-                            ? "bg-primary border-primary text-primary-foreground"
-                            : "bg-card border-input text-foreground hover:bg-accent"
-                        }`}
-                      >
-                        {g.name}
-                      </button>
-                    );
-                  })}
+            (groupTypes as any[])
+              .filter((type: any) => (type.groups ?? []).length > 0)
+              .map((type: any) => (
+                <div key={type._id} className="space-y-2">
+                  <div className="text-xs font-bold text-foreground/90 uppercase tracking-wider flex items-center gap-1.5">
+                    <span className="text-primary">•</span>
+                    <span>{type.name}</span>
+                    <span className="text-[10px] text-muted-foreground lowercase">({type.category})</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {(type.groups ?? []).map((g: any) => {
+                      const selected = capabilityGroupIds.includes(String(g._id));
+                      return (
+                        <button
+                          key={g._id}
+                          type="button"
+                          onClick={() => setCapabilityGroupIds((prev) => selected ? prev.filter((id) => id !== String(g._id)) : [...prev, String(g._id)])}
+                          className={`text-xs px-2.5 py-1 rounded-full border transition-all ${
+                            selected
+                              ? "bg-primary border-primary text-primary-foreground font-medium shadow-xs"
+                              : "bg-card border-input text-foreground hover:bg-accent hover:border-primary/40"
+                          }`}
+                        >
+                          {g.name}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            ))
+              ))
           )}
         </div>
         <Button onClick={() => saveVendorProfile.mutate()} disabled={saveVendorProfile.isPending} id="save-vendor-profile-btn">
@@ -465,7 +471,7 @@ function SettingsClient() {
   );
 
   const vendorDscForm = (
-    <Card className="glass card-3d border-0">
+    <Card className="rounded-2xl card-3d border-border bg-card">
       <CardHeader>
         <CardTitle className="text-base font-[family-name:var(--font-heading)]">Digital signature certificate (DSC)</CardTitle>
         <p className="text-xs text-muted-foreground">
@@ -514,7 +520,10 @@ function SettingsClient() {
 
   return (
     <div className="max-w-3xl mx-auto space-y-6 animate-fade-in-up">
-      <div>
+      <div className="space-y-2">
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-primary/10 text-primary text-[11px] font-bold uppercase tracking-wider">
+          <Settings size={11} /> Workspace
+        </span>
         <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground font-[family-name:var(--font-heading)] text-gradient">Settings</h1>
         {isCompany && (
           <p className="text-sm text-muted-foreground mt-1">Company details and documents on this page are public to all suppliers.</p>
@@ -533,7 +542,7 @@ function SettingsClient() {
         </TabsList>
 
         <TabsContent value="account" className="mt-4">
-          <Card className="glass card-3d border-0">
+          <Card className="rounded-2xl card-3d border-border bg-card">
             <CardHeader><CardTitle className="text-base font-[family-name:var(--font-heading)]">Account</CardTitle></CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center gap-3">
@@ -559,7 +568,7 @@ function SettingsClient() {
           {isVendor && vendorProfileForm}
           {isVendor && vendorDscForm}
           {isCompany && profile && (
-          <Card className="glass card-3d border-0">
+          <Card className="rounded-2xl card-3d border-border bg-card">
             <CardHeader>
               <CardTitle className="text-base font-[family-name:var(--font-heading)]">Public company profile</CardTitle>
               <p className="text-xs text-muted-foreground">Visible to all suppliers on your company page and tenders.</p>
@@ -647,7 +656,7 @@ function SettingsClient() {
 
         { (isCompany || isVendor) && (
           <TabsContent value="documents" className="mt-4">
-          <Card className="glass card-3d border-0">
+          <Card className="rounded-2xl card-3d border-border bg-card">
             <CardHeader>
               <CardTitle className="text-base font-[family-name:var(--font-heading)]">Public documents</CardTitle>
               <p className="text-xs text-muted-foreground">
@@ -708,7 +717,7 @@ function SettingsClient() {
 
         {isCompany && (
           <TabsContent value="terms" className="mt-4">
-          <Card className="glass card-3d border-0">
+          <Card className="rounded-2xl card-3d border-border bg-card">
             <CardHeader>
               <CardTitle className="text-base font-[family-name:var(--font-heading)]">Company terms library</CardTitle>
               <p className="text-xs text-muted-foreground">Pre-prepared, editable templates attached to new tenders. Seeded terms can be customized; your own custom terms stay private to this company and cannot be copied by other EPCs.</p>

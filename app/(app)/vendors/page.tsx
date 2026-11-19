@@ -4,15 +4,19 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
-import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Building2, Search, Loader2, Globe, Phone, Shield, MessageSquare, FileText } from "lucide-react";
+import { Building2, Search, Loader2, Globe, Phone, Shield, MessageSquare, FileText, Star, Activity } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { EngagementDialog } from "@/components/engagement-dialog";
 
 export default function VendorsPage() {
   const { data: session } = useSession();
   const [search, setSearch] = useState("");
+  const [selectedVendor, setSelectedVendor] = useState<{ id: string; name: string } | null>(null);
+
+  const userType = (session?.user as any)?.userType;
+  const isCompany = userType === "company" || (session?.user as any)?.role === "admin";
 
   const qParams = new URLSearchParams({ userType: "vendor", limit: "100" });
   if (search) qParams.set("search", search);
@@ -27,7 +31,10 @@ export default function VendorsPage() {
 
   return (
     <div className="space-y-5 animate-fade-in-up">
-      <div>
+      <div className="space-y-2">
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-primary/10 text-primary text-[11px] font-bold uppercase tracking-wider">
+          <Shield size={11} /> Verified Supplier Network
+        </span>
         <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground font-[family-name:var(--font-heading)] text-gradient">
           Suppliers
         </h1>
@@ -35,20 +42,20 @@ export default function VendorsPage() {
           Review groups, documents, and profiles before inviting a supplier to an RFQ, RFP, or tender.
         </p>
       </div>
-      <Card className="glass border-0 p-1 max-w-md">
-        <CardContent className="p-3">
+      <div className="bg-card border border-border rounded-2xl card-3d max-w-md">
+        <div className="p-3">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input placeholder="Search suppliers..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" id="vendor-search" />
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
       {isLoading ? (
         <div className="flex items-center justify-center py-16"><Loader2 className="animate-spin h-6 w-6 text-muted-foreground" /></div>
       ) : vendors.length === 0 ? (
-        <div className="text-center py-16 rounded-2xl border border-dashed border-border bg-muted/20">
-          <div className="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center mx-auto mb-4">
-            <Building2 className="h-7 w-7 text-muted-foreground" />
+        <div className="text-center py-16 rounded-3xl border border-dashed border-border bg-card card-3d">
+          <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
+            <Building2 className="h-7 w-7 text-primary" />
           </div>
           <p className="text-muted-foreground font-medium">No suppliers found</p>
         </div>
@@ -58,8 +65,9 @@ export default function VendorsPage() {
             const groups = v.capabilityGroups ?? [];
             const extraGroups = Math.max(0, groups.length - 4);
             return (
-              <Card key={v._id} className="card-3d hover:border-primary/30 h-full border-0">
-                <CardContent className="p-5 flex flex-col h-full">
+              <div key={v._id} className="group relative bg-card border border-border rounded-2xl card-3d card-sheen hover:border-primary/40 h-full overflow-hidden">
+                <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-primary/60 via-primary/20 to-transparent" />
+                <div className="p-5 flex flex-col h-full">
                   <div className="flex items-start gap-3 mb-3">
                     <div className="w-11 h-11 rounded-2xl bg-primary/10 flex items-center justify-center shrink-0">
                       <Building2 className="h-5 w-5 text-primary" />
@@ -80,7 +88,7 @@ export default function VendorsPage() {
                       <>
                         {groups.slice(0, 4).map((g: any) => (
                           <Badge key={g._id} variant={g.category === "service" ? "default" : "outline"} className="text-[10px]">
-                            {g.name}
+                            {g.typeName ? `${g.typeName}: ${g.name}` : g.name}
                           </Badge>
                         ))}
                         {extraGroups > 0 && <Badge variant="secondary" className="text-[10px]">+{extraGroups}</Badge>}
@@ -100,19 +108,53 @@ export default function VendorsPage() {
                       {v.publicDocumentCount ?? 0} doc{(v.publicDocumentCount ?? 0) === 1 ? "" : "s"}
                     </span>
                   </div>
-                  <div className="mt-auto flex gap-2">
-                    <Link href={`/vendors/${v._id}`} className="flex-1">
-                      <Button variant="outline" size="sm" className="w-full">View profile</Button>
-                    </Link>
-                    <Link href={`/messages/dm/${v._id}`} className="flex-1">
-                      <Button size="sm" className="w-full"><MessageSquare className="h-3.5 w-3.5" /> Message</Button>
-                    </Link>
+                  <div className="mt-auto space-y-2">
+                    <div className="flex gap-2">
+                      <Link href={`/vendors/${v._id}`} className="flex-1">
+                        <Button variant="outline" size="sm" className="w-full rounded-xl">View profile</Button>
+                      </Link>
+                      <Link href={`/messages/dm/${v._id}`} className="flex-1">
+                        <Button size="sm" className="w-full rounded-xl"><MessageSquare className="h-3.5 w-3.5" /> Message</Button>
+                      </Link>
+                    </div>
+
+                    {isCompany && (
+                      <div className="flex gap-2 pt-1 border-t border-border/50">
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          className="flex-1 rounded-xl text-xs h-8 gap-1.5"
+                          onClick={() => setSelectedVendor({ id: v._id, name: v.companyName || "Supplier" })}
+                        >
+                          <Activity className="h-3.5 w-3.5 text-primary" /> Bids &amp; Activity
+                        </Button>
+                        <Link href={`/vendors/${v._id}/evaluation`} className="flex-1">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="w-full rounded-xl text-xs h-8 gap-1.5 border-amber-500/30 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10"
+                          >
+                            <Star className="h-3.5 w-3.5 fill-amber-500 text-amber-500" /> Grading &amp; Eval
+                          </Button>
+                        </Link>
+                      </div>
+                    )}
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             );
           })}
         </div>
+      )}
+
+      {selectedVendor && (
+        <EngagementDialog
+          open={Boolean(selectedVendor)}
+          onOpenChange={(open) => !open && setSelectedVendor(null)}
+          vendorId={selectedVendor.id}
+          vendorName={selectedVendor.name}
+          isCompanyViewer={true}
+        />
       )}
     </div>
   );

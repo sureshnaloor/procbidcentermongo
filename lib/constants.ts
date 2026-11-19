@@ -16,6 +16,124 @@ export const PUBLIC_DOCUMENT_CATEGORIES = [
   { value: 'other', label: 'Other' },
 ] as const;
 
+export interface DefaultTaxonomyItem {
+  name: string;
+  category: 'material' | 'service';
+  description?: string;
+  groups: { name: string; description?: string }[];
+}
+
+export const DEFAULT_TAXONOMY: DefaultTaxonomyItem[] = [
+  {
+    name: 'Electrical',
+    category: 'material',
+    description: 'Electrical power, control, cabling, and distribution materials',
+    groups: [
+      { name: 'Cables LV', description: 'Low voltage (1.1kV) power, control, and instrumentation cables' },
+      { name: 'Cables HV', description: 'Medium and high voltage (3.3kV to 33kV+) power cables' },
+      { name: 'Glands', description: 'Cable glands (brass, SS, Ex d flameproof, Ex e increased safety)' },
+      { name: 'Lugs', description: 'Cable lugs, bimetallic connectors, crimping terminals, and ferrules' },
+      { name: 'Switchgear & MCC', description: 'Low/medium voltage switchboards, motor control centers, and breakers' },
+      { name: 'Transformers', description: 'Distribution, power, and dry-type cast resin transformers' },
+      { name: 'Lighting & Fixtures', description: 'Industrial, LED, flameproof, and emergency lighting fixtures' },
+      { name: 'Cable Trays & Conduits', description: 'Perforated/ladder cable trays, GI conduits, and accessories' },
+    ],
+  },
+  {
+    name: 'Mechanical',
+    category: 'material',
+    description: 'Piping, valves, rotating and static process equipment',
+    groups: [
+      { name: 'Pipes & Fittings', description: 'Carbon steel, stainless steel, duplex, and alloy pipes and fittings' },
+      { name: 'Valves & Actuators', description: 'Gate, globe, ball, butterfly, check valves, and pneumatic/electric actuators' },
+      { name: 'Flanges & Fasteners', description: 'Weld neck, blind, slip-on flanges, stud bolts, nuts, and gaskets' },
+      { name: 'Pumps & Compressors', description: 'Centrifugal pumps, positive displacement pumps, and air compressors' },
+      { name: 'Process Equipment', description: 'Pressure vessels, shell & tube heat exchangers, storage tanks, and columns' },
+    ],
+  },
+  {
+    name: 'Civil',
+    category: 'material',
+    description: 'Civil engineering, structural, and architectural construction materials',
+    groups: [
+      { name: 'Structural Steel', description: 'Universal beams, columns, channels, plates, and grating' },
+      { name: 'Reinforcement Steel', description: 'High-strength TMT rebar, binding wire, and mesh' },
+      { name: 'Cement & Concrete Materials', description: 'OPC/PPC cement, coarse aggregates, sand, and admixtures' },
+      { name: 'Building & Finishing Materials', description: 'Masonry blocks, architectural cladding, sealants, and coatings' },
+    ],
+  },
+  {
+    name: 'Instrumentation',
+    category: 'material',
+    description: 'Process measurement, control automation, and safety instrumentation',
+    groups: [
+      { name: 'Transmitters & Gauges', description: 'Pressure, differential pressure, temperature, level, and flow transmitters' },
+      { name: 'Control Systems & PLC', description: 'DCS, PLC, SCADA controllers, safety instrumented system (SIS) racks' },
+      { name: 'Tubing & Manifolds', description: 'SS 316 instrumentation tubing, 2/3/5 valve manifolds, and compression fittings' },
+      { name: 'Analyzers & Detectors', description: 'Gas detectors, flame detectors, and process stream online analyzers' },
+    ],
+  },
+  {
+    name: 'Civil & Construction',
+    category: 'service',
+    description: 'Civil engineering, site development, foundation, and structural works',
+    groups: [
+      { name: 'Earthworks & Site Preparation', description: 'Topsoil removal, mass excavation, site grading, and compaction' },
+      { name: 'Piling & Deep Foundations', description: 'Cast-in-situ bored piles, sheet piling, and heavy equipment foundations' },
+      { name: 'RCC & Superstructure Works', description: 'Reinforced concrete structures, paving, control buildings, and drainage' },
+    ],
+  },
+  {
+    name: 'Mechanical Services',
+    category: 'service',
+    description: 'Piping spool fabrication, equipment erection, and plant maintenance',
+    groups: [
+      { name: 'Piping Fabrication & Erection', description: 'Shop spool fabrication, field weld erection, and hydrotesting' },
+      { name: 'Equipment Erection & Rigging', description: 'Heavy lifting, column dressing, and rotating equipment precision alignment' },
+      { name: 'Welding & Fabrication', description: 'SMAW, GTAW, SAW alloy welding and structural steel fabrication' },
+      { name: 'Mechanical Overhaul & Maintenance', description: 'Plant turnaround maintenance, pump overhaul, and valve refurbishment' },
+    ],
+  },
+  {
+    name: 'Electrical Services',
+    category: 'service',
+    description: 'Electrical installation, cabling, switchgear commissioning, and testing',
+    groups: [
+      { name: 'Cable Laying & Termination', description: 'Tray installation, HV/LV cable pulling, glanding, and megger testing' },
+      { name: 'Substation Installation', description: 'GIS/AIS erection, transformer dressing, busduct installation' },
+      { name: 'Testing & Commissioning', description: 'Relay coordination, primary/secondary injection, and pre-commissioning' },
+    ],
+  },
+  {
+    name: 'Instrumentation Services',
+    category: 'service',
+    description: 'Field instrumentation, calibration, and loop checking services',
+    groups: [
+      { name: 'Field Instrument Erection', description: 'Impulse piping, instrument stand installation, and cabling' },
+      { name: 'Calibration & Loop Checks', description: 'Bench calibration, DCS loop checking, and functional logic validation' },
+    ],
+  },
+  {
+    name: 'Inspection & NDT',
+    category: 'service',
+    description: 'Non-destructive testing, quality inspection, and third-party QA/QC',
+    groups: [
+      { name: 'Non-Destructive Testing (NDT)', description: 'Radiographic testing (RT), ultrasonic testing (UT), MPI, and dye penetrant' },
+      { name: 'QA/QC & Third Party Inspection', description: 'Vendor shop inspection, welding inspection, and third-party audits' },
+    ],
+  },
+  {
+    name: 'Safety & Environment',
+    category: 'service',
+    description: 'HSE services, fire protection, and environmental management',
+    groups: [
+      { name: 'Fire Protection Contracting', description: 'Fire water network, deluge, sprinkler, and clean agent gas suppression' },
+      { name: 'Chemical Cleaning & Decontamination', description: 'Pre-commissioning chemical cleaning, passivation, and hydro-jetting' },
+      { name: 'HSE & Environmental Auditing', description: 'Environmental monitoring, emission testing, and industrial hygiene' },
+    ],
+  },
+];
+
 export const DEFAULT_MATERIAL_GROUPS = [
   { name: 'Pipes & Fittings', description: 'Pipes, flanges, fittings, and piping accessories' },
   { name: 'Valves & Actuators', description: 'Process valves, control valves, and actuators' },

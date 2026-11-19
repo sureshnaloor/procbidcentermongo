@@ -108,12 +108,10 @@ export function TenderForm({ mode, tender }: TenderFormProps) {
   });
 
   const catalog = Array.isArray(groupsWithTypes) ? groupsWithTypes : [];
-  const materialGroups = catalog
-    .filter((t: any) => t.category === "material")
-    .flatMap((t: any) => t.groups ?? []);
-  const serviceGroups = catalog
-    .filter((t: any) => t.category === "service")
-    .flatMap((t: any) => t.groups ?? []);
+  const materialTypes = catalog.filter((t: any) => t.category === "material" && (t.groups?.length || 0) > 0);
+  const serviceTypes = catalog.filter((t: any) => t.category === "service" && (t.groups?.length || 0) > 0);
+  const materialGroups = materialTypes.flatMap((t: any) => t.groups ?? []);
+  const serviceGroups = serviceTypes.flatMap((t: any) => t.groups ?? []);
   const hasGroups = materialGroups.length > 0 || serviceGroups.length > 0;
 
   const { data: templateData } = useQuery({
@@ -680,52 +678,76 @@ export function TenderForm({ mode, tender }: TenderFormProps) {
               )}
             </div>
           ) : (
-            <div className="space-y-4">
-              {materialGroups.length > 0 && (
-                <div className="space-y-2">
-                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Material Groups</div>
-                  <div className="flex flex-wrap gap-2">
-                    {materialGroups.map((g: any) => {
-                      const isSelected = form.groupIds.includes(g._id);
-                      return (
-                        <button
-                          key={g._id}
-                          type="button"
-                          onClick={() => handleGroupToggle(g._id)}
-                          className={`text-xs px-2.5 py-1 rounded-full border transition-all ${
-                            isSelected
-                              ? "bg-primary border-primary text-primary-foreground"
-                              : "bg-card border-input text-foreground hover:bg-accent"
-                          }`}
-                        >
-                          {g.name}
-                        </button>
-                      );
-                    })}
+            <div className="space-y-6">
+              {materialTypes.length > 0 && (
+                <div className="space-y-3">
+                  <div className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-primary" />
+                    <span>Materials Classification</span>
+                  </div>
+                  <div className="space-y-3 pl-1 border-l-2 border-primary/20">
+                    {materialTypes.map((type: any) => (
+                      <div key={type._id} className="space-y-1.5 pl-3">
+                        <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                          {type.name}
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {(type.groups ?? []).map((g: any) => {
+                            const isSelected = form.groupIds.includes(g._id);
+                            return (
+                              <button
+                                key={g._id}
+                                type="button"
+                                onClick={() => handleGroupToggle(g._id)}
+                                className={`text-xs px-2.5 py-1 rounded-full border transition-all ${
+                                  isSelected
+                                    ? "bg-primary border-primary text-primary-foreground font-medium shadow-xs"
+                                    : "bg-card border-input text-foreground hover:bg-accent hover:border-primary/40"
+                                }`}
+                              >
+                                {g.name}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
-              {serviceGroups.length > 0 && (
-                <div className="space-y-2">
-                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Service Groups</div>
-                  <div className="flex flex-wrap gap-2">
-                    {serviceGroups.map((g: any) => {
-                      const isSelected = form.groupIds.includes(g._id);
-                      return (
-                        <button
-                          key={g._id}
-                          type="button"
-                          onClick={() => handleGroupToggle(g._id)}
-                          className={`text-xs px-2.5 py-1 rounded-full border transition-all ${
-                            isSelected
-                              ? "bg-primary border-primary text-primary-foreground"
-                              : "bg-card border-input text-foreground hover:bg-accent"
-                          }`}
-                        >
-                          {g.name}
-                        </button>
-                      );
-                    })}
+              {serviceTypes.length > 0 && (
+                <div className="space-y-3">
+                  <div className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-primary" />
+                    <span>Services Classification</span>
+                  </div>
+                  <div className="space-y-3 pl-1 border-l-2 border-primary/20">
+                    {serviceTypes.map((type: any) => (
+                      <div key={type._id} className="space-y-1.5 pl-3">
+                        <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                          {type.name}
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {(type.groups ?? []).map((g: any) => {
+                            const isSelected = form.groupIds.includes(g._id);
+                            return (
+                              <button
+                                key={g._id}
+                                type="button"
+                                onClick={() => handleGroupToggle(g._id)}
+                                className={`text-xs px-2.5 py-1 rounded-full border transition-all ${
+                                  isSelected
+                                    ? "bg-primary border-primary text-primary-foreground font-medium shadow-xs"
+                                    : "bg-card border-input text-foreground hover:bg-accent hover:border-primary/40"
+                                }`}
+                              >
+                                {g.name}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
